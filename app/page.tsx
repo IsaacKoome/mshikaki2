@@ -6,7 +6,6 @@ import { db } from "@/lib/firebase";
 import EventCard from "@/components/EventCard";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useAuth } from "@/lib/auth"; // ✅ Make sure this is implemented
 
 interface EventItem {
   id: string;
@@ -18,7 +17,6 @@ interface EventItem {
 
 export default function HomePage() {
   const router = useRouter();
-  const { user, loading: authLoading } = useAuth(); // ✅ Get current user and auth loading state
 
   const [weddingEvents, setWeddingEvents] = useState<EventItem[]>([]);
   const [birthdayEvents, setBirthdayEvents] = useState<EventItem[]>([]);
@@ -42,7 +40,7 @@ export default function HomePage() {
           title: doc.data().title,
           location: doc.data().location,
           images: doc.data().images || [],
-          ownerId: doc.data().ownerId || "", // ✅ capture ownerId
+          ownerId: doc.data().ownerId || "",
         }));
         setter(events);
       } catch (error) {
@@ -70,7 +68,6 @@ export default function HomePage() {
     <section className="space-y-4">
       <h2 className="text-xl font-semibold">{label}</h2>
       {isLoading ? (
-        // Use a consistent loading indicator, maybe a simple spinner or text
         <div className="flex items-center space-x-2 text-gray-500">
           <svg className="animate-spin h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -108,26 +105,15 @@ export default function HomePage() {
         </h1>
 
         <div className="flex flex-wrap gap-2">
-          {/* Example of using the 'user' variable: conditionally rendering buttons */}
-          {authLoading ? (
-            <p className="text-gray-500 italic">Loading user...</p>
-          ) : user ? (
-            // If user is logged in, show "Add Event" buttons
-            <>
-              <Link href="/add-event/add-wedding" className="bg-emerald-400 text-white px-4 py-2 rounded-xl hover:bg-emerald-500">
-                + 💖 Wedding
-              </Link>
-              <Link href="/add-event/add-birthday" className="bg-blue-500 text-white px-4 py-2 rounded-xl hover:bg-blue-600">
-                + 🎂 Birthday
-              </Link>
-              <Link href="/add-event/add-babyshower" className="bg-purple-500 text-white px-4 py-2 rounded-xl hover:bg-purple-600">
-                + 👶 Baby Shower
-              </Link>
-            </>
-          ) : (
-            // If no user (or not logged in), suggest logging in
-            <p className="text-gray-600 italic">Log in to add new events.</p>
-          )}
+          <Link href="/add-event/add-wedding" className="bg-emerald-400 text-white px-4 py-2 rounded-xl hover:bg-emerald-500">
+            + 💖 Wedding
+          </Link>
+          <Link href="/add-event/add-birthday" className="bg-blue-500 text-white px-4 py-2 rounded-xl hover:bg-blue-600">
+            + 🎂 Birthday
+          </Link>
+          <Link href="/add-event/add-babyshower" className="bg-purple-500 text-white px-4 py-2 rounded-xl hover:bg-purple-600">
+            + 👶 Baby Shower
+          </Link>
         </div>
       </div>
 
