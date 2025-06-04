@@ -1,3 +1,4 @@
+// components/AddEventForm.tsx
 "use client";
 
 import { useState } from "react";
@@ -68,9 +69,15 @@ export default function AddEventForm({
     return urls;
   };
 
+  // Defensive check: Ensure eventType is a string before calling slice
+  // This is the most direct fix for the "slice of undefined" error.
+  const displayEventType = typeof eventType === 'string' ? eventType.slice(0, -1) : '';
+
+
   return (
     <main className="max-w-3xl mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-6 text-rose-500">🎉 Add {eventType.slice(0, -1)} Event</h1>
+      {/* Use the safely processed displayEventType variable */}
+      <h1 className="text-2xl font-bold mb-6 text-rose-500">🎉 Add {displayEventType} Event</h1>
 
       <form onSubmit={handleSubmit} className="space-y-5 bg-white shadow p-6 rounded-xl">
         <div>
