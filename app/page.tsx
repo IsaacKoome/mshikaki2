@@ -18,7 +18,7 @@ interface EventItem {
 
 export default function HomePage() {
   const router = useRouter();
-  const { user } = useAuth(); // ✅ Get current user
+  const { user, loading: authLoading } = useAuth(); // ✅ Get current user and auth loading state
 
   const [weddingEvents, setWeddingEvents] = useState<EventItem[]>([]);
   const [birthdayEvents, setBirthdayEvents] = useState<EventItem[]>([]);
@@ -70,15 +70,16 @@ export default function HomePage() {
     <section className="space-y-4">
       <h2 className="text-xl font-semibold">{label}</h2>
       {isLoading ? (
-        <p className="text-gray-400 italic">Loading {label.toLowerCase()}...</p>
-      ) : events.length === 0 ? (
-        <div className="flex items-center space-x-2 text-pink-500">
-          <svg className="animate-spin h-5 w-5 text-pink-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        // Use a consistent loading indicator, maybe a simple spinner or text
+        <div className="flex items-center space-x-2 text-gray-500">
+          <svg className="animate-spin h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3.5-3.5L12 0v4a8 8 0 100 16v-4l-3.5 3.5L12 24v-4a8 8 0 01-8-8z"></path>
           </svg>
-          <span className="italic">Loading {label} events 🎈...</span>
+          <span className="italic">Loading {label.toLowerCase()} events...</span>
         </div>
+      ) : events.length === 0 ? (
+        <p className="text-gray-400 italic">No {label.toLowerCase()} events found yet.</p>
       ) : (
         <div className="flex space-x-4 overflow-x-auto scrollbar-hide pb-2">
           {events.map((event) => (
@@ -107,15 +108,26 @@ export default function HomePage() {
         </h1>
 
         <div className="flex flex-wrap gap-2">
-          <Link href="/add-event/add-wedding" className="bg-emerald-400 text-white px-4 py-2 rounded-xl">
-            + 💖 Wedding
-          </Link>
-          <Link href="/add-event/add-birthday" className="bg-blue-500 text-white px-4 py-2 rounded-xl hover:bg-blue-600">
-            + 🎂 Birthday
-          </Link>
-          <Link href="/add-event/add-babyshower" className="bg-purple-500 text-white px-4 py-2 rounded-xl hover:bg-purple-600">
-            + 👶 Baby Shower
-          </Link>
+          {/* Example of using the 'user' variable: conditionally rendering buttons */}
+          {authLoading ? (
+            <p className="text-gray-500 italic">Loading user...</p>
+          ) : user ? (
+            // If user is logged in, show "Add Event" buttons
+            <>
+              <Link href="/add-event/add-wedding" className="bg-emerald-400 text-white px-4 py-2 rounded-xl hover:bg-emerald-500">
+                + 💖 Wedding
+              </Link>
+              <Link href="/add-event/add-birthday" className="bg-blue-500 text-white px-4 py-2 rounded-xl hover:bg-blue-600">
+                + 🎂 Birthday
+              </Link>
+              <Link href="/add-event/add-babyshower" className="bg-purple-500 text-white px-4 py-2 rounded-xl hover:bg-purple-600">
+                + 👶 Baby Shower
+              </Link>
+            </>
+          ) : (
+            // If no user (or not logged in), suggest logging in
+            <p className="text-gray-600 italic">Log in to add new events.</p>
+          )}
         </div>
       </div>
 

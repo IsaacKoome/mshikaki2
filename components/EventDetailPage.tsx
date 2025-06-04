@@ -8,7 +8,7 @@ import {
   addDoc,
   query,
   where,
-  getDocs,
+  // getDocs, // Removed: no direct usage outside of onSnapshot's internal mechanism
   updateDoc,
   onSnapshot,
 } from "firebase/firestore";
@@ -19,13 +19,25 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 
+// Define a more specific type for your event data
+interface EventData {
+  title: string;
+  location: string;
+  images: string[];
+  goal: number; // Assuming 'goal' is a number
+  raised?: number; // 'raised' might be optional or start at 0
+  // Add other properties that an event might have from Firestore
+  [key: string]: any; // Allow for other unknown properties if necessary, but try to specify
+}
+
 interface Props {
   id: string;
   collectionName: "weddings" | "birthdays" | "babyshowers";
 }
 
 export default function EventDetailPage({ id, collectionName }: Props) {
-  const [event, setEvent] = useState<any>(null);
+  // Use the specific EventData type for event state
+  const [event, setEvent] = useState<EventData | null>(null);
   const [loading, setLoading] = useState(true);
   const [amount, setAmount] = useState(0);
   const [contributions, setContributions] = useState(0);
@@ -34,12 +46,21 @@ export default function EventDetailPage({ id, collectionName }: Props) {
   useEffect(() => {
     const fetchEvent = async () => {
       const ref = doc(db, collectionName, id);
-      const snapshot = await getDoc(ref);
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-        setEvent(data);
+      try {
+        const snapshot = await getDoc(ref);
+        if (snapshot.exists()) {
+          // Cast the data to EventData type
+          setEvent(snapshot.data() as EventData);
+        } else {
+          console.warn(`Event with ID ${id} not found in collection ${collectionName}`);
+          setEvent(null); // Explicitly set to null if not found
+        }
+      } catch (error) {
+        console.error("Error fetching event:", error);
+        setEvent(null); // Handle error by setting event to null
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     const fetchContributions = () => {
@@ -47,6 +68,7 @@ export default function EventDetailPage({ id, collectionName }: Props) {
         collection(db, "contributions"),
         where("eventId", "==", id)
       );
+      // The onSnapshot listener implicitly gets documents, so getDocs isn't directly called by you.
       const unsub = onSnapshot(q, (snapshot) => {
         const total = snapshot.docs.reduce(
           (sum, doc) => sum + (doc.data().amount || 0),
@@ -63,21 +85,32 @@ export default function EventDetailPage({ id, collectionName }: Props) {
   }, [id, collectionName]);
 
   const handleContribute = async () => {
-    await addDoc(collection(db, "contributions"), {
-      eventId: id,
-      amount,
-      timestamp: new Date(),
-    });
-    const eventRef = doc(db, collectionName, id);
-    await updateDoc(eventRef, {
-      raised: (event?.raised || 0) + amount,
-    });
-    setAmount(0);
+    if (amount <= 0) {
+      alert("Please enter a positive amount to contribute.");
+      return;
+    }
+    try {
+      await addDoc(collection(db, "contributions"), {
+        eventId: id,
+        amount,
+        timestamp: new Date(),
+      });
+      const eventRef = doc(db, collectionName, id);
+      // Ensure 'event' is not null before attempting to read 'raised'
+      await updateDoc(eventRef, {
+        raised: (event?.raised || 0) + amount,
+      });
+      setAmount(0); // Reset amount after successful contribution
+    } catch (error) {
+      console.error("Error during contribution:", error);
+      alert("Failed to process contribution. Please try again.");
+    }
   };
 
   if (loading) return <p className="p-6">Loading...</p>;
   if (!event) return <p className="p-6">Event not found.</p>;
 
+  // Ensure 'event' is not null or undefined before accessing properties
   const goal = event.goal || 100000;
   const progress = Math.min((contributions / goal) * 100, 100);
 
@@ -114,12 +147,14 @@ export default function EventDetailPage({ id, collectionName }: Props) {
             value={amount}
             onChange={(e) => setAmount(Number(e.target.value))}
             placeholder="KES"
+            min="0" // Prevent negative contributions
           />
           <Button onClick={handleContribute}>Submit</Button>
         </DialogContent>
       </Dialog>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+        {/* Safely access images array and ensure it's not null/undefined */}
         {(event.images || []).map((url: string, index: number) => (
           <div
             key={index}

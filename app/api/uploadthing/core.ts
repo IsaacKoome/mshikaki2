@@ -8,8 +8,9 @@ export const ourFileRouter = {
     image: { maxFileSize: "4MB", maxFileCount: 5 },
     video: { maxFileSize: "16MB", maxFileCount: 1 }
   })
-  .middleware(async (req) => {
+  .middleware(async (_req) => { // <-- Changed 'req' to '_req'
     // Add any authentication logic here
+    // Example: const authToken = _req.headers.get("authorization");
     return {};
   })
   .onUploadComplete(async ({ file }) => {

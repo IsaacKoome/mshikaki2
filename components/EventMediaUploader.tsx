@@ -1,7 +1,7 @@
 "use client";
 import { UploadDropzone } from "@uploadthing/react";
 import { OurFileRouter } from "@/app/api/uploadthing/core";
-import Image from "next/image"; // Changed from img to Next.js Image
+// import Image from "next/image"; // Removed: Image component is not used in this file
 
 interface EventMediaUploaderProps {
   onUploadComplete: (url: string) => void;
