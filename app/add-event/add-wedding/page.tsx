@@ -1,3 +1,6 @@
+// app/add-event/add-wedding/page.tsx
+"use client"; // <-- Add this line
+
 import AddEventForm from "@/components/AddEventForm";
 
 export default function AddWeddingPage() {
