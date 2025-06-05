@@ -1,4 +1,3 @@
-// components/AddEventForm.tsx
 "use client";
 
 import { useState } from "react";
@@ -7,6 +6,7 @@ import { db, storage } from "@/lib/firebase";
 import { collection, addDoc, Timestamp } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { v4 as uuidv4 } from "uuid";
+import { useAuth } from "@/lib/auth"; // 👈 Import the auth hook
 
 interface AddEventFormProps {
   eventType: "weddings" | "birthdays" | "babyshowers";
@@ -20,6 +20,8 @@ export default function AddEventForm({
   coupleOrPersonLabel,
 }: AddEventFormProps) {
   const router = useRouter();
+  const { user } = useAuth(); // 👈 Get the current user
+
   const [title, setTitle] = useState("");
   const [names, setNames] = useState("");
   const [location, setLocation] = useState("");
@@ -31,6 +33,12 @@ export default function AddEventForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!user) {
+      alert("You must be logged in to add an event.");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -45,6 +53,7 @@ export default function AddEventForm({
         story,
         images: imageUrls,
         videos: videoUrls,
+        ownerId: user.uid, // 👈 Save the user's UID
         createdAt: Timestamp.now(),
       });
 
@@ -60,23 +69,25 @@ export default function AddEventForm({
 
   const uploadFiles = async (files: FileList, folder: string): Promise<string[]> => {
     const urls: string[] = [];
+
     for (const file of Array.from(files)) {
       const fileRef = ref(storage, `${folder}/${uuidv4()}-${file.name}`);
-      const snapshot = await uploadBytes(fileRef, file);
+      const snapshot = await uploadBytes(fileRef, file, {
+        customMetadata: {
+          ownerId: user?.uid || "", // 👈 Include ownerId for storage rules
+        },
+      });
       const url = await getDownloadURL(snapshot.ref);
       urls.push(url);
     }
+
     return urls;
   };
 
-  // Defensive check: Ensure eventType is a string before calling slice
-  // This is the most direct fix for the "slice of undefined" error.
-  const displayEventType = typeof eventType === 'string' ? eventType.slice(0, -1) : '';
-
+  const displayEventType = typeof eventType === "string" ? eventType.slice(0, -1) : "";
 
   return (
     <main className="max-w-3xl mx-auto p-6">
-      {/* Use the safely processed displayEventType variable */}
       <h1 className="text-2xl font-bold mb-6 text-rose-500">🎉 Add {displayEventType} Event</h1>
 
       <form onSubmit={handleSubmit} className="space-y-5 bg-white shadow p-6 rounded-xl">

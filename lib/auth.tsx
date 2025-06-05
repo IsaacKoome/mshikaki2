@@ -1,22 +1,23 @@
 // lib/auth.tsx
 "use client";
 import { createContext, useContext, useEffect, useState } from "react";
-import { onAuthStateChanged, User } from "firebase/auth";
+import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, User } from "firebase/auth";
 import { auth } from "./firebase";
 
-// Define the context type
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  loginWithGoogle: () => Promise<void>;
+  logout: () => Promise<void>;
 }
 
-// Create the context
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
+  loginWithGoogle: async () => {},
+  logout: async () => {},
 });
 
-// Provider component
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -30,14 +31,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe();
   }, []);
 
+  const loginWithGoogle = async () => {
+    const provider = new GoogleAuthProvider();
+    await signInWithPopup(auth, provider);
+  };
+
+  const logout = async () => {
+    await signOut(auth);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading }}>
+    <AuthContext.Provider value={{ user, loading, loginWithGoogle, logout }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-// Custom hook to use auth context
 export function useAuth() {
   return useContext(AuthContext);
 }

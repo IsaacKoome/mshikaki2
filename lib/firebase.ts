@@ -7,6 +7,9 @@ import { getAuth } from "firebase/auth";
 // https://firebase.google.com/docs/web/setup#available-libraries
 
 // Your web app's Firebase configuration
+import { GoogleAuthProvider } from "firebase/auth";
+
+
 const firebaseConfig = {
   apiKey: "AIzaSyDamYso9BljQEDOCZdpb46h36lVoGCE2PY",
   authDomain: "mshikaki-events.firebaseapp.com",
@@ -23,3 +26,5 @@ const storage = getStorage(app);
 
 export { db, storage };
 export const auth = getAuth(app); // ✅ Make sure this line is present
+
+export const googleProvider = new GoogleAuthProvider();
