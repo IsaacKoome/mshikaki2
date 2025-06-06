@@ -1,14 +1,15 @@
-// app/add-event/add-birthday/page.tsx
-"use client"; // <-- Add this line
+"use client";
 
 import AddEventForm from "@/components/AddEventForm";
+import { eventTypes } from "@/data/eventTypes";
 
 export default function AddBirthdayPage() {
+  const config = eventTypes["birthdays"];
   return (
     <AddEventForm
       eventType="birthdays"
-      titleLabel="Birthday Title"
-      coupleOrPersonLabel="Birthday Person's Name"
+      titleLabel={config.titleLabel}
+      coupleOrPersonLabel={config.coupleOrPersonLabel}
     />
   );
 }

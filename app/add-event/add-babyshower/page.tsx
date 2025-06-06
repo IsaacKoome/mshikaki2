@@ -1,14 +1,15 @@
-// app/add-event/add-babyshower/page.tsx
-"use client"; // <-- Add this line
+"use client";
 
 import AddEventForm from "@/components/AddEventForm";
+import { eventTypes } from "@/data/eventTypes";
 
 export default function AddBabyShowerPage() {
+  const config = eventTypes["babyshowers"];
   return (
     <AddEventForm
       eventType="babyshowers"
-      titleLabel="Baby Shower Title"
-      coupleOrPersonLabel="Parent(s) or Baby's Name"
+      titleLabel={config.titleLabel}
+      coupleOrPersonLabel={config.coupleOrPersonLabel}
     />
   );
 }

@@ -1,5 +1,15 @@
-import EventDetailPage from "@/components/EventDetailPage";
+"use client";
 
-export default function WeddingEventPage({ params }: { params: { id: string } }) {
-  return <EventDetailPage id={params.id} collectionName="weddings" />;
+import AddEventForm from "@/components/AddEventForm";
+import { eventTypes } from "@/data/eventTypes";
+
+export default function AddWeddingPage() {
+  const config = eventTypes["weddings"];
+  return (
+    <AddEventForm
+      eventType="weddings"
+      titleLabel={config.titleLabel}
+      coupleOrPersonLabel={config.coupleOrPersonLabel}
+    />
+  );
 }

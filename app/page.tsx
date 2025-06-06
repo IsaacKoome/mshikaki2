@@ -124,7 +124,7 @@ export default function HomePage() {
                 onClick={logout}
                 className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 text-sm"
               >
-                Sign Outt
+                Sign Out
               </button>
             </div>
           ) : (

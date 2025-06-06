@@ -1,3 +1,4 @@
+// components/AddEventForm.tsx
 "use client";
 
 import { useState } from "react";
@@ -6,7 +7,7 @@ import { db, storage } from "@/lib/firebase";
 import { collection, addDoc, Timestamp } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { v4 as uuidv4 } from "uuid";
-import { useAuth } from "@/lib/auth"; // 👈 Import the auth hook
+import { useAuth } from "@/lib/auth";
 
 interface AddEventFormProps {
   eventType: "weddings" | "birthdays" | "babyshowers";
@@ -20,7 +21,7 @@ export default function AddEventForm({
   coupleOrPersonLabel,
 }: AddEventFormProps) {
   const router = useRouter();
-  const { user } = useAuth(); // 👈 Get the current user
+  const { user } = useAuth();
 
   const [title, setTitle] = useState("");
   const [names, setNames] = useState("");
@@ -31,14 +32,18 @@ export default function AddEventForm({
   const [videos, setVideos] = useState<FileList | null>(null);
   const [loading, setLoading] = useState(false);
 
+  if (!user) {
+    return (
+      <main className="max-w-2xl mx-auto p-6 text-center text-gray-700">
+        <h1 className="text-2xl font-semibold text-rose-500 mb-4">🚫 Access Denied</h1>
+        <p className="mb-4">You must be signed in to add an event.</p>
+        <p className="text-sm text-gray-500">Please log in using the button on the homepage.</p>
+      </main>
+    );
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!user) {
-      alert("You must be logged in to add an event.");
-      return;
-    }
-
     setLoading(true);
 
     try {
@@ -53,8 +58,8 @@ export default function AddEventForm({
         story,
         images: imageUrls,
         videos: videoUrls,
-        ownerId: user.uid, // 👈 Save the user's UID
         createdAt: Timestamp.now(),
+        ownerId: user.uid, // Save owner ID for access control
       });
 
       alert("🎉 Event saved!");
@@ -69,22 +74,16 @@ export default function AddEventForm({
 
   const uploadFiles = async (files: FileList, folder: string): Promise<string[]> => {
     const urls: string[] = [];
-
     for (const file of Array.from(files)) {
       const fileRef = ref(storage, `${folder}/${uuidv4()}-${file.name}`);
-      const snapshot = await uploadBytes(fileRef, file, {
-        customMetadata: {
-          ownerId: user?.uid || "", // 👈 Include ownerId for storage rules
-        },
-      });
+      const snapshot = await uploadBytes(fileRef, file);
       const url = await getDownloadURL(snapshot.ref);
       urls.push(url);
     }
-
     return urls;
   };
 
-  const displayEventType = typeof eventType === "string" ? eventType.slice(0, -1) : "";
+  const displayEventType = typeof eventType === 'string' ? eventType.slice(0, -1) : '';
 
   return (
     <main className="max-w-3xl mx-auto p-6">
