@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTrigger, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { CalendarIcon, MapPinIcon } from "lucide-react";
+import { useAuth } from "@/lib/auth";
 
 interface EventData {
   title: string;
@@ -37,11 +38,14 @@ interface Props {
 }
 
 export default function EventDetailPage({ id, collectionName }: Props) {
+  const { user } = useAuth();
   const [event, setEvent] = useState<EventData | null>(null);
   const [loading, setLoading] = useState(true);
   const [amount, setAmount] = useState(0);
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
   const [contributions, setContributions] = useState(0);
-  const [contributionList, setContributionList] = useState<{ amount: number }[]>([]);
+  const [contributionList, setContributionList] = useState<any[]>([]);
   const router = useRouter();
 
   useEffect(() => {
@@ -70,9 +74,7 @@ export default function EventDetailPage({ id, collectionName }: Props) {
           0
         );
         setContributions(total);
-        setContributionList(snapshot.docs.map(doc => ({
-          amount: doc.data().amount || 0,
-        })));
+        setContributionList(snapshot.docs.map(doc => doc.data()));
       });
       return unsub;
     };
@@ -82,22 +84,41 @@ export default function EventDetailPage({ id, collectionName }: Props) {
     return () => unsub();
   }, [id, collectionName]);
 
+  useEffect(() => {
+    if (user) {
+      setName(user.displayName || "");
+    }
+  }, [user]);
+
+  const maskPhone = (phone: string) => {
+    return phone.length >= 7
+      ? phone.slice(0, 2) + "***" + phone.slice(-2)
+      : "07***00";
+  };
+
   const handleContribute = async () => {
-    if (amount <= 0) {
-      alert("Please enter a valid amount.");
+    if (amount <= 0 || !name || !phone) {
+      alert("Please fill in all fields.");
       return;
     }
+
     try {
       await addDoc(collection(db, "contributions"), {
         eventId: id,
         amount,
+        name,
+        phone,
         timestamp: new Date(),
       });
+
       const eventRef = doc(db, collectionName, id);
       await updateDoc(eventRef, {
         raised: (event?.raised || 0) + amount,
       });
+
       setAmount(0);
+      setName(user?.displayName || "");
+      setPhone("");
     } catch (error) {
       console.error("Contribution error:", error);
     }
@@ -111,10 +132,7 @@ export default function EventDetailPage({ id, collectionName }: Props) {
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
-      <button
-        onClick={() => router.back()}
-        className="text-rose-600 hover:text-rose-800 text-sm underline"
-      >
+      <button onClick={() => router.back()} className="text-rose-600 hover:text-rose-800 text-sm underline">
         ← Go Back
       </button>
 
@@ -148,13 +166,25 @@ export default function EventDetailPage({ id, collectionName }: Props) {
         KES {contributions.toLocaleString()} raised of KES {goal.toLocaleString()}
       </p>
 
-      {/* ✅ Contribute Dialog */}
+      {/* ✅ Contribution Dialog */}
       <Dialog>
         <DialogTrigger asChild>
           <Button className="bg-rose-600 hover:bg-rose-700">Contribute Now</Button>
         </DialogTrigger>
         <DialogContent className="space-y-4">
           <DialogTitle>Enter Contribution</DialogTitle>
+          <Input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Your Name"
+          />
+          <Input
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="Phone (e.g., 0712345678)"
+          />
           <Input
             type="number"
             value={amount}
@@ -166,7 +196,7 @@ export default function EventDetailPage({ id, collectionName }: Props) {
         </DialogContent>
       </Dialog>
 
-      {/* ✅ Event Media */}
+      {/* ✅ Media Gallery */}
       <div className="grid sm:grid-cols-2 gap-4 mt-4">
         {(event.images || []).map((url, index) => (
           <div key={index} className="relative w-full h-64 rounded-xl overflow-hidden shadow-md">
@@ -190,7 +220,7 @@ export default function EventDetailPage({ id, collectionName }: Props) {
           ) : (
             contributionList.map((c, index) => (
               <li key={index} className="text-sm text-gray-700">
-                Anonymous – 07***{index + 10} – KES {c.amount.toLocaleString()}
+                {c.name || "Anonymous"} – {maskPhone(c.phone || "")} – KES {c.amount?.toLocaleString()}
               </li>
             ))
           )}
