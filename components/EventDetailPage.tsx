@@ -15,12 +15,7 @@ import { db } from "@/lib/firebase";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogTrigger,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTrigger, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { CalendarIcon, MapPinIcon } from "lucide-react";
 
@@ -46,6 +41,7 @@ export default function EventDetailPage({ id, collectionName }: Props) {
   const [loading, setLoading] = useState(true);
   const [amount, setAmount] = useState(0);
   const [contributions, setContributions] = useState(0);
+  const [contributionList, setContributionList] = useState<{ amount: number }[]>([]);
   const router = useRouter();
 
   useEffect(() => {
@@ -67,16 +63,16 @@ export default function EventDetailPage({ id, collectionName }: Props) {
     };
 
     const fetchContributions = () => {
-      const q = query(
-        collection(db, "contributions"),
-        where("eventId", "==", id)
-      );
+      const q = query(collection(db, "contributions"), where("eventId", "==", id));
       const unsub = onSnapshot(q, (snapshot) => {
         const total = snapshot.docs.reduce(
           (sum, doc) => sum + (doc.data().amount || 0),
           0
         );
         setContributions(total);
+        setContributionList(snapshot.docs.map(doc => ({
+          amount: doc.data().amount || 0,
+        })));
       });
       return unsub;
     };
@@ -97,12 +93,10 @@ export default function EventDetailPage({ id, collectionName }: Props) {
         amount,
         timestamp: new Date(),
       });
-
       const eventRef = doc(db, collectionName, id);
       await updateDoc(eventRef, {
         raised: (event?.raised || 0) + amount,
       });
-
       setAmount(0);
     } catch (error) {
       console.error("Contribution error:", error);
@@ -151,38 +145,31 @@ export default function EventDetailPage({ id, collectionName }: Props) {
         />
       </div>
       <p className="text-sm text-gray-600">
-        KES {contributions.toLocaleString()} raised of KES{" "}
-        {goal.toLocaleString()}
+        KES {contributions.toLocaleString()} raised of KES {goal.toLocaleString()}
       </p>
 
+      {/* ✅ Contribute Dialog */}
       <Dialog>
         <DialogTrigger asChild>
-          <Button className="bg-rose-600 hover:bg-rose-700">
-            Contribute Now
-          </Button>
+          <Button className="bg-rose-600 hover:bg-rose-700">Contribute Now</Button>
         </DialogTrigger>
         <DialogContent className="space-y-4">
-          <DialogTitle className="sr-only">Contribution Dialog</DialogTitle>
-
-          <h2 className="text-lg font-semibold text-rose-500">Contribute</h2>
-
+          <DialogTitle>Enter Contribution</DialogTitle>
           <Input
             type="number"
             value={amount}
             onChange={(e) => setAmount(Number(e.target.value))}
-            placeholder="Enter amount in KES"
+            placeholder="KES"
             min="0"
           />
           <Button onClick={handleContribute}>Submit</Button>
         </DialogContent>
       </Dialog>
 
+      {/* ✅ Event Media */}
       <div className="grid sm:grid-cols-2 gap-4 mt-4">
         {(event.images || []).map((url, index) => (
-          <div
-            key={index}
-            className="relative w-full h-64 rounded-xl overflow-hidden shadow-md"
-          >
+          <div key={index} className="relative w-full h-64 rounded-xl overflow-hidden shadow-md">
             <Image
               src={url}
               alt={`Image ${index + 1}`}
@@ -192,6 +179,22 @@ export default function EventDetailPage({ id, collectionName }: Props) {
             />
           </div>
         ))}
+      </div>
+
+      {/* ✅ Contribution List */}
+      <div className="bg-white mt-8 p-4 rounded-lg shadow-md border">
+        <h3 className="text-lg font-semibold text-gray-800 mb-3">🎁 Contributions</h3>
+        <ul className="space-y-2">
+          {contributionList.length === 0 ? (
+            <p className="text-gray-500 italic">No contributions yet. Be the first!</p>
+          ) : (
+            contributionList.map((c, index) => (
+              <li key={index} className="text-sm text-gray-700">
+                Anonymous – 07***{index + 10} – KES {c.amount.toLocaleString()}
+              </li>
+            ))
+          )}
+        </ul>
       </div>
     </div>
   );
