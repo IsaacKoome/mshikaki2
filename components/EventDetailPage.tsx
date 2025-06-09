@@ -10,7 +10,6 @@ import {
   where,
   updateDoc,
   onSnapshot,
-  orderBy,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import Image from "next/image";
@@ -21,6 +20,7 @@ import {
   DialogContent,
   DialogTrigger,
   DialogTitle,
+  DialogClose,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { CalendarIcon, MapPinIcon } from "lucide-react";
@@ -45,8 +45,6 @@ interface Props {
 
 export default function EventDetailPage({ id, collectionName }: Props) {
   const { user } = useAuth();
-  const router = useRouter();
-
   const [event, setEvent] = useState<EventData | null>(null);
   const [loading, setLoading] = useState(true);
   const [amount, setAmount] = useState(0);
@@ -55,6 +53,7 @@ export default function EventDetailPage({ id, collectionName }: Props) {
   const [contributions, setContributions] = useState(0);
   const [contributionList, setContributionList] = useState<any[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     const fetchEvent = async () => {
@@ -75,21 +74,20 @@ export default function EventDetailPage({ id, collectionName }: Props) {
     };
 
     const fetchContributions = () => {
-      const q = query(
-        collection(db, "contributions"),
-        where("eventId", "==", id),
-        orderBy("timestamp", "asc") // Show newest last
-      );
-
+      const q = query(collection(db, "contributions"), where("eventId", "==", id));
       const unsub = onSnapshot(q, (snapshot) => {
-        const total = snapshot.docs.reduce(
-          (sum, doc) => sum + (doc.data().amount || 0),
-          0
-        );
-        setContributions(total);
-        setContributionList(snapshot.docs.map((doc) => doc.data()));
-      });
+        const docs = snapshot.docs.map((doc) => doc.data());
 
+        const sorted = docs.sort((a, b) => {
+          const t1 = a.timestamp?.toMillis?.() || 0;
+          const t2 = b.timestamp?.toMillis?.() || 0;
+          return t1 - t2;
+        });
+
+        const total = sorted.reduce((sum, doc) => sum + (doc.amount || 0), 0);
+        setContributions(total);
+        setContributionList(sorted);
+      });
       return unsub;
     };
 
@@ -132,7 +130,7 @@ export default function EventDetailPage({ id, collectionName }: Props) {
 
       setAmount(0);
       setPhone("");
-      setDialogOpen(false); // ✅ Close dialog
+      setDialogOpen(false); // close dialog
     } catch (error) {
       console.error("Contribution error:", error);
     }
@@ -146,10 +144,7 @@ export default function EventDetailPage({ id, collectionName }: Props) {
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
-      <button
-        onClick={() => router.back()}
-        className="text-rose-600 hover:text-rose-800 text-sm underline"
-      >
+      <button onClick={() => router.back()} className="text-rose-600 hover:text-rose-800 text-sm underline">
         ← Go Back
       </button>
 
@@ -173,7 +168,6 @@ export default function EventDetailPage({ id, collectionName }: Props) {
         </div>
       )}
 
-      {/* ✅ Progress Bar */}
       <div className="bg-gray-200 rounded-full h-4 overflow-hidden">
         <div
           className="bg-green-500 h-full rounded-full transition-all duration-300"
@@ -181,21 +175,22 @@ export default function EventDetailPage({ id, collectionName }: Props) {
         />
       </div>
       <p className="text-sm text-gray-600">
-        KES {contributions.toLocaleString()} raised of KES{" "}
-        {goal.toLocaleString()}
+        KES {contributions.toLocaleString()} raised of KES {goal.toLocaleString()}
       </p>
 
       {/* ✅ Contribute Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogTrigger asChild>
-          <Button className="bg-rose-600 hover:bg-rose-700">
-            Contribute Now
-          </Button>
+          <Button className="bg-rose-600 hover:bg-rose-700">Contribute Now</Button>
         </DialogTrigger>
-        <DialogContent className="space-y-4 max-w-sm mx-auto rounded-xl">
-          <DialogTitle className="text-lg text-center text-rose-600 font-bold">
+        <DialogContent
+          className="space-y-4 max-w-[90%] sm:max-w-sm mx-auto rounded-xl bg-white p-6 shadow-lg z-50"
+          style={{ top: "50%", transform: "translateY(-50%)" }}
+        >
+          <DialogTitle className="text-center text-rose-600 font-bold text-lg">
             🎁 Make a Contribution
           </DialogTitle>
+
           <Input
             type="text"
             value={name}
@@ -212,22 +207,20 @@ export default function EventDetailPage({ id, collectionName }: Props) {
             type="number"
             value={amount}
             onChange={(e) => setAmount(Number(e.target.value))}
-            placeholder="Amount in KES"
+            placeholder="KES"
             min="0"
           />
+
           <Button className="w-full" onClick={handleContribute}>
             Submit
           </Button>
         </DialogContent>
       </Dialog>
 
-      {/* ✅ Media Gallery */}
+      {/* ✅ Media */}
       <div className="grid sm:grid-cols-2 gap-4 mt-4">
         {(event.images || []).map((url, index) => (
-          <div
-            key={index}
-            className="relative w-full h-64 rounded-xl overflow-hidden shadow-md"
-          >
+          <div key={index} className="relative w-full h-64 rounded-xl overflow-hidden shadow-md">
             <Image
               src={url}
               alt={`Image ${index + 1}`}
@@ -241,19 +234,14 @@ export default function EventDetailPage({ id, collectionName }: Props) {
 
       {/* ✅ Contribution List */}
       <div className="bg-white mt-8 p-4 rounded-lg shadow-md border">
-        <h3 className="text-lg font-semibold text-gray-800 mb-3">
-          🎁 Contributions
-        </h3>
+        <h3 className="text-lg font-semibold text-gray-800 mb-3">🎁 Contributions</h3>
         <ul className="space-y-2">
           {contributionList.length === 0 ? (
-            <p className="text-gray-500 italic">
-              No contributions yet. Be the first!
-            </p>
+            <p className="text-gray-500 italic">No contributions yet. Be the first!</p>
           ) : (
             contributionList.map((c, index) => (
               <li key={index} className="text-sm text-gray-700">
-                {c.name || "Anonymous"} – {maskPhone(c.phone || "")} – KES{" "}
-                {c.amount?.toLocaleString()}
+                {c.name || "Anonymous"} – {maskPhone(c.phone || "")} – KES {c.amount?.toLocaleString()}
               </li>
             ))
           )}
