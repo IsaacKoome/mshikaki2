@@ -15,9 +15,14 @@ import { db } from "@/lib/firebase";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogTrigger,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { CalendarIcon, MapPinIcon } from "lucide-react"; // Icons!
+import { CalendarIcon, MapPinIcon } from "lucide-react";
 
 interface EventData {
   title: string;
@@ -51,7 +56,6 @@ export default function EventDetailPage({ id, collectionName }: Props) {
         if (snapshot.exists()) {
           setEvent(snapshot.data() as EventData);
         } else {
-          console.warn("Event not found");
           setEvent(null);
         }
       } catch (error) {
@@ -63,7 +67,10 @@ export default function EventDetailPage({ id, collectionName }: Props) {
     };
 
     const fetchContributions = () => {
-      const q = query(collection(db, "contributions"), where("eventId", "==", id));
+      const q = query(
+        collection(db, "contributions"),
+        where("eventId", "==", id)
+      );
       const unsub = onSnapshot(q, (snapshot) => {
         const total = snapshot.docs.reduce(
           (sum, doc) => sum + (doc.data().amount || 0),
@@ -90,10 +97,12 @@ export default function EventDetailPage({ id, collectionName }: Props) {
         amount,
         timestamp: new Date(),
       });
+
       const eventRef = doc(db, collectionName, id);
       await updateDoc(eventRef, {
         raised: (event?.raised || 0) + amount,
       });
+
       setAmount(0);
     } catch (error) {
       console.error("Contribution error:", error);
@@ -142,15 +151,21 @@ export default function EventDetailPage({ id, collectionName }: Props) {
         />
       </div>
       <p className="text-sm text-gray-600">
-        KES {contributions.toLocaleString()} raised of KES {goal.toLocaleString()}
+        KES {contributions.toLocaleString()} raised of KES{" "}
+        {goal.toLocaleString()}
       </p>
 
       <Dialog>
         <DialogTrigger asChild>
-          <Button className="bg-rose-600 hover:bg-rose-700">Contribute Now</Button>
+          <Button className="bg-rose-600 hover:bg-rose-700">
+            Contribute Now
+          </Button>
         </DialogTrigger>
         <DialogContent className="space-y-4">
+          <DialogTitle className="sr-only">Contribution Dialog</DialogTitle>
+
           <h2 className="text-lg font-semibold text-rose-500">Contribute</h2>
+
           <Input
             type="number"
             value={amount}
@@ -164,7 +179,10 @@ export default function EventDetailPage({ id, collectionName }: Props) {
 
       <div className="grid sm:grid-cols-2 gap-4 mt-4">
         {(event.images || []).map((url, index) => (
-          <div key={index} className="relative w-full h-64 rounded-xl overflow-hidden shadow-md">
+          <div
+            key={index}
+            className="relative w-full h-64 rounded-xl overflow-hidden shadow-md"
+          >
             <Image
               src={url}
               alt={`Image ${index + 1}`}
