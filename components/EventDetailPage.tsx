@@ -20,7 +20,6 @@ import {
   DialogContent,
   DialogTrigger,
   DialogTitle,
-  DialogClose,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { CalendarIcon, MapPinIcon } from "lucide-react";
@@ -47,7 +46,7 @@ export default function EventDetailPage({ id, collectionName }: Props) {
   const { user } = useAuth();
   const [event, setEvent] = useState<EventData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [amount, setAmount] = useState(0);
+  const [amount, setAmount] = useState<number | "">(0);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [contributions, setContributions] = useState(0);
@@ -77,7 +76,6 @@ export default function EventDetailPage({ id, collectionName }: Props) {
       const q = query(collection(db, "contributions"), where("eventId", "==", id));
       const unsub = onSnapshot(q, (snapshot) => {
         const docs = snapshot.docs.map((doc) => doc.data());
-
         const sorted = docs.sort((a, b) => {
           const t1 = a.timestamp?.toMillis?.() || 0;
           const t2 = b.timestamp?.toMillis?.() || 0;
@@ -109,8 +107,8 @@ export default function EventDetailPage({ id, collectionName }: Props) {
   };
 
   const handleContribute = async () => {
-    if (amount <= 0 || !name || !phone) {
-      alert("Please fill in all fields.");
+    if (!amount || amount <= 0 || !name || !phone) {
+      alert("Please fill in all fields correctly.");
       return;
     }
 
@@ -130,7 +128,7 @@ export default function EventDetailPage({ id, collectionName }: Props) {
 
       setAmount(0);
       setPhone("");
-      setDialogOpen(false); // close dialog
+      setDialogOpen(false);
     } catch (error) {
       console.error("Contribution error:", error);
     }
@@ -143,8 +141,11 @@ export default function EventDetailPage({ id, collectionName }: Props) {
   const progress = Math.min((contributions / goal) * 100, 100);
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
-      <button onClick={() => router.back()} className="text-rose-600 hover:text-rose-800 text-sm underline">
+    <div className="p-6 max-w-4xl mx-auto space-y-6 bg-gray-50 min-h-screen">
+      <button
+        onClick={() => router.back()}
+        className="text-rose-600 hover:text-rose-800 text-sm underline"
+      >
         ← Go Back
       </button>
 
@@ -178,15 +179,14 @@ export default function EventDetailPage({ id, collectionName }: Props) {
         KES {contributions.toLocaleString()} raised of KES {goal.toLocaleString()}
       </p>
 
-      {/* ✅ Contribute Dialog */}
+      {/* Contribute Modal */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogTrigger asChild>
-          <Button className="bg-rose-600 hover:bg-rose-700">Contribute Now</Button>
+          <Button className="bg-rose-600 hover:bg-rose-700 w-full sm:w-auto">
+            Contribute Now
+          </Button>
         </DialogTrigger>
-        <DialogContent
-          className="space-y-4 max-w-[90%] sm:max-w-sm mx-auto rounded-xl bg-white p-6 shadow-lg z-50"
-          style={{ top: "50%", transform: "translateY(-50%)" }}
-        >
+        <DialogContent className="space-y-4 max-w-sm w-full mx-auto p-6 rounded-xl shadow-lg z-50 bg-white">
           <DialogTitle className="text-center text-rose-600 font-bold text-lg">
             🎁 Make a Contribution
           </DialogTitle>
@@ -206,18 +206,18 @@ export default function EventDetailPage({ id, collectionName }: Props) {
           <Input
             type="number"
             value={amount}
-            onChange={(e) => setAmount(Number(e.target.value))}
+            onChange={(e) => setAmount(e.target.value === "" ? "" : Number(e.target.value))}
             placeholder="KES"
-            min="0"
+            min="1"
           />
 
-          <Button className="w-full" onClick={handleContribute}>
+          <Button onClick={handleContribute} className="w-full">
             Submit
           </Button>
         </DialogContent>
       </Dialog>
 
-      {/* ✅ Media */}
+      {/* Images */}
       <div className="grid sm:grid-cols-2 gap-4 mt-4">
         {(event.images || []).map((url, index) => (
           <div key={index} className="relative w-full h-64 rounded-xl overflow-hidden shadow-md">
@@ -232,7 +232,7 @@ export default function EventDetailPage({ id, collectionName }: Props) {
         ))}
       </div>
 
-      {/* ✅ Contribution List */}
+      {/* Contribution List */}
       <div className="bg-white mt-8 p-4 rounded-lg shadow-md border">
         <h3 className="text-lg font-semibold text-gray-800 mb-3">🎁 Contributions</h3>
         <ul className="space-y-2">
@@ -241,7 +241,8 @@ export default function EventDetailPage({ id, collectionName }: Props) {
           ) : (
             contributionList.map((c, index) => (
               <li key={index} className="text-sm text-gray-700">
-                {c.name || "Anonymous"} – {maskPhone(c.phone || "")} – KES {c.amount?.toLocaleString()}
+                {c.name || "Anonymous"} – {maskPhone(c.phone || "")} – KES{" "}
+                {c.amount?.toLocaleString()}
               </li>
             ))
           )}
