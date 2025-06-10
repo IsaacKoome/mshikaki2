@@ -3,11 +3,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { db, storage } from "@/lib/firebase";
-import { collection, addDoc, Timestamp } from "firebase/firestore";
+// Import doc, updateDoc, and increment from firebase/firestore
+import { collection, addDoc, Timestamp, doc, updateDoc, increment } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { v4 as uuidv4 } from "uuid";
-import { useAuth } from "@/lib/auth";
+import { db, storage } from "@/lib/firebase"; // db and storage are correctly imported
+import { useAuth } from "@/lib/auth"; // useAuth is correctly imported
 
 interface AddEventFormProps {
   eventType: "weddings" | "birthdays" | "babyshowers";
@@ -21,17 +22,19 @@ export default function AddEventForm({
   coupleOrPersonLabel,
 }: AddEventFormProps) {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user } = useAuth(); // Get the current user from your AuthContext
 
   const [title, setTitle] = useState("");
   const [names, setNames] = useState("");
   const [location, setLocation] = useState("");
   const [date, setDate] = useState("");
   const [story, setStory] = useState("");
+  const [contributionNote, setContributionNote] = useState("");
   const [images, setImages] = useState<FileList | null>(null);
   const [videos, setVideos] = useState<FileList | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // This check is good: if no user, prevent adding event
   if (!user) {
     return (
       <main className="max-w-2xl mx-auto p-6 text-center text-gray-700">
@@ -50,20 +53,31 @@ export default function AddEventForm({
       const imageUrls = images ? await uploadFiles(images, "images") : [];
       const videoUrls = videos ? await uploadFiles(videos, "videos") : [];
 
+      // Add the event document to the specific event type collection
       await addDoc(collection(db, eventType), {
         title,
         names,
         location,
         date,
         story,
+        contributionNote,
         images: imageUrls,
         videos: videoUrls,
         createdAt: Timestamp.now(),
-        ownerId: user.uid, // Save owner ID for access control
+        ownerId: user.uid, // This is correctly set to the logged-in user's UID
       });
 
+      // --- NEW: Increment eventCount in user's profile ---
+      const userProfileRef = doc(db, "users", user.uid);
+      await updateDoc(userProfileRef, {
+        eventCount: increment(1), // Atomically increments the count
+      });
+      // --- END NEW ---
+
       alert("🎉 Event saved!");
-      router.push("/");
+      // --- NEW: Redirect to the user's profile page instead of the homepage ---
+      router.push(`/profile/${user.uid}`);
+      // --- END NEW ---
     } catch (error) {
       console.error("Error saving event:", error);
       alert("Failed to submit. Please try again.");
@@ -83,7 +97,7 @@ export default function AddEventForm({
     return urls;
   };
 
-  const displayEventType = typeof eventType === 'string' ? eventType.slice(0, -1) : '';
+  const displayEventType = typeof eventType === "string" ? eventType.slice(0, -1) : "";
 
   return (
     <main className="max-w-3xl mx-auto p-6">
@@ -144,8 +158,20 @@ export default function AddEventForm({
             placeholder="Say something about this event..."
             value={story}
             onChange={(e) => setStory(e.target.value)}
-            rows={5}
+            rows={4}
             required
+          />
+        </div>
+
+        {/* ✅ New Field */}
+        <div>
+          <label className="block font-medium">Why are you raising funds? (Optional)</label>
+          <textarea
+            className="w-full border rounded p-2"
+            placeholder="Explain how contributions will help..."
+            value={contributionNote}
+            onChange={(e) => setContributionNote(e.target.value)}
+            rows={3}
           />
         </div>
 

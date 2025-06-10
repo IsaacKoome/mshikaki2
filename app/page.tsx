@@ -6,8 +6,8 @@ import { collection, getDocs, query, orderBy } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import EventCard from "@/components/EventCard";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { useAuth } from "@/lib/auth";
+import Link from "next/link"; // Make sure Link is imported
+import { useAuth } from "@/lib/auth"; // Make sure useAuth is imported
 
 interface EventItem {
   id: string;
@@ -19,7 +19,7 @@ interface EventItem {
 
 export default function HomePage() {
   const router = useRouter();
-  const { user, loading: authLoading,loginWithGoogle, logout } = useAuth();
+  const { user, loading: authLoading, loginWithGoogle, logout } = useAuth(); // Destructure user, loading, loginWithGoogle, logout
 
   const [weddingEvents, setWeddingEvents] = useState<EventItem[]>([]);
   const [birthdayEvents, setBirthdayEvents] = useState<EventItem[]>([]);
@@ -113,13 +113,20 @@ export default function HomePage() {
           ) : user ? (
             <div className="flex items-center gap-2">
               {user.photoURL && (
-                <img
-                  src={user.photoURL}
-                  alt="avatar"
-                  className="w-8 h-8 rounded-full"
-                />
+                // Wrap the image in a Link component
+                <Link href={`/profile/${user.uid}`}>
+                  <img
+                    src={user.photoURL}
+                    alt="avatar"
+                    className="w-8 h-8 rounded-full cursor-pointer hover:ring-2 hover:ring-rose-400 transition-all" // Added cursor and hover styles
+                    title="View Profile" // Added a tooltip for better UX
+                  />
+                </Link>
               )}
-              <p className="text-sm font-medium">Welcome, {user.displayName || "User"}</p>
+              {/* Also make the "Welcome, User" text a link */}
+              <Link href={`/profile/${user.uid}`} className="text-sm font-medium hover:underline">
+                Welcome, {user.displayName || "User"}
+              </Link>
               <button
                 onClick={logout}
                 className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 text-sm"

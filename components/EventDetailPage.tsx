@@ -22,8 +22,18 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { CalendarIcon, MapPinIcon } from "lucide-react";
+import {
+  CalendarIcon,
+  MapPinIcon,
+  InfoIcon,
+  ChevronDownIcon,
+} from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import {
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+} from "@/components/ui/collapsible";
 
 interface EventData {
   title: string;
@@ -34,6 +44,7 @@ interface EventData {
   raised?: number;
   story?: string;
   date?: string;
+  contributionNote?: string;
   [key: string]: any;
 }
 
@@ -52,6 +63,7 @@ export default function EventDetailPage({ id, collectionName }: Props) {
   const [contributions, setContributions] = useState(0);
   const [contributionList, setContributionList] = useState<any[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [showNote, setShowNote] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -167,6 +179,25 @@ export default function EventDetailPage({ id, collectionName }: Props) {
         <div className="bg-white shadow p-4 rounded-lg border text-gray-700">
           <p className="whitespace-pre-line">{event.story}</p>
         </div>
+      )}
+
+      {event.contributionNote && (
+        <Collapsible open={showNote} onOpenChange={setShowNote} className="bg-yellow-50 border border-yellow-300 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2 text-yellow-800 font-medium">
+              <InfoIcon className="w-5 h-5" />
+              Why Support This Event?
+            </div>
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" size="sm">
+                <ChevronDownIcon className={`w-4 h-4 transform transition-transform ${showNote ? "rotate-180" : ""}`} />
+              </Button>
+            </CollapsibleTrigger>
+          </div>
+          <CollapsibleContent className="text-sm text-gray-700 whitespace-pre-line mt-1">
+            {event.contributionNote}
+          </CollapsibleContent>
+        </Collapsible>
       )}
 
       <div className="bg-gray-200 rounded-full h-4 overflow-hidden">
