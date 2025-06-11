@@ -2,7 +2,7 @@
 "use client";
 import { createContext, useContext, useEffect, useState } from "react";
 // Changed signInWithRedirect back to signInWithPopup
-import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, User } from "firebase/auth";
+import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, User } from "firebase/auth"; // <<< CHANGED HERE
 // Keep Firestore imports
 import { doc, setDoc, getDoc, Timestamp } from "firebase/firestore";
 import { auth, db } from "./firebase"; // Make sure db is imported from firebase.ts
@@ -28,12 +28,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // User is signed in. Check if their profile exists in Firestore.
         const userDocRef = doc(db, "users", firebaseUser.uid);
         const userDocSnap = await getDoc(userDocRef);
 
         if (!userDocSnap.exists()) {
-          // If profile doesn't exist, create it with default values
           console.log("Creating new user profile in Firestore for UID:", firebaseUser.uid);
           await setDoc(userDocRef, {
             uid: firebaseUser.uid,
@@ -51,12 +49,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => unsubscribe();
-  }, []); // Empty dependency array means this runs once on mount
+  }, []);
 
   const loginWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
     // Changed back to signInWithPopup
-    await signInWithPopup(auth, provider);
+    await signInWithPopup(auth, provider); // <<< CHANGED HERE
   };
 
   const logout = async () => {
