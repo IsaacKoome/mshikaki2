@@ -7,6 +7,7 @@ import { doc, getDoc, collection, query, where, getDocs, orderBy } from "firebas
 import { db } from "@/lib/firebase";
 import EventCard from "@/components/EventCard"; // Assuming you have this component for displaying events
 import { useAuth } from "@/lib/auth"; // To check if it's the current user's profile
+import FollowButton from "@/components/FollowButton"; // <<< ADD THIS IMPORT <<<
 
 interface UserProfile {
   uid: string;
@@ -24,6 +25,8 @@ interface EventItem {
   images: string[];
   ownerId: string;
   eventType: string; // Add eventType to link back to detail page
+  // Add createdAt here if you intend to sort them client-side after fetching
+  createdAt: any; // Assuming it's a Firestore Timestamp or Date
 }
 
 export default function UserProfilePage() {
@@ -62,9 +65,6 @@ export default function UserProfilePage() {
             eventCount: userData.eventCount || 0,
           });
         } else {
-          // If no custom profile exists, try to get basic info from Firebase Auth itself
-          // (This part is tricky because you can't query auth users by UID directly without admin SDK)
-          // For now, we'll assume a profile doc exists or display 'Unknown User'
           setProfileError("User profile not found.");
           setProfile(null); // Clear previous profile if not found
         }
@@ -77,40 +77,39 @@ export default function UserProfilePage() {
     };
 
     const fetchUserEvents = async () => {
-        setLoadingEvents(true);
-        try {
-            const eventTypes = ["weddings", "birthdays", "babyshowers"];
-            const allUserEvents: EventItem[] = [];
+      setLoadingEvents(true);
+      try {
+        const eventTypes = ["weddings", "birthdays", "babyshowers"];
+        const allUserEvents: EventItem[] = [];
 
-            for (const type of eventTypes) {
-                const q = query(
-                    collection(db, type),
-                    where("ownerId", "==", uid),
-                    orderBy("createdAt", "desc")
-                );
-                const snapshot = await getDocs(q);
-                snapshot.docs.forEach(doc => {
-                    allUserEvents.push({
-                        id: doc.id,
-                        title: doc.data().title,
-                        location: doc.data().location,
-                        images: doc.data().images || [],
-                        ownerId: doc.data().ownerId || "",
-                        eventType: type // Store the event type for routing
-                    });
-                });
-            }
-            setUserEvents(allUserEvents.sort((a, b) => {
-                // You might want a more sophisticated sort if `createdAt` isn't consistent across collections
-                // For now, assuming they are ordered by query.
-                return 0; // Maintain order from queries or add a real sort if needed
-            }));
-        } catch (error) {
-            console.error("Error fetching user events:", error);
-            // Optionally set an error state for events
-        } finally {
-            setLoadingEvents(false);
+        for (const type of eventTypes) {
+          const q = query(
+            collection(db, type),
+            where("ownerId", "==", uid),
+            orderBy("createdAt", "desc")
+          );
+          const snapshot = await getDocs(q);
+          snapshot.docs.forEach(doc => {
+            allUserEvents.push({
+              id: doc.id,
+              title: doc.data().title,
+              location: doc.data().location,
+              images: doc.data().images || [],
+              ownerId: doc.data().ownerId || "",
+              eventType: type, // Store the event type for routing
+              createdAt: doc.data().createdAt, // <<< ENSURE createdAt IS INCLUDED HERE <<<
+            });
+          });
         }
+        // IMPORTANT: Sort all events by createdAt in descending order after fetching from all collections
+        allUserEvents.sort((a, b) => b.createdAt.toDate().getTime() - a.createdAt.toDate().getTime());
+        setUserEvents(allUserEvents);
+      } catch (error) {
+        console.error("Error fetching user events:", error);
+        // Optionally set an error state for events
+      } finally {
+        setLoadingEvents(false);
+      }
     };
 
 
@@ -169,11 +168,11 @@ export default function UserProfilePage() {
             Events Created: {profile.eventCount !== undefined ? profile.eventCount : "..."}
           </p>
 
-          {/* Follow/Unfollow button placeholder (will implement later) */}
-          {!isCurrentUserProfile && (
-            <button className="mt-4 bg-blue-500 text-white px-5 py-2 rounded-full hover:bg-blue-600 transition-colors">
-              Follow (Coming Soon)
-            </button>
+          {/* FOLLOW BUTTON INTEGRATION */}
+          {!isCurrentUserProfile && currentUser && ( // Only show if not current user's profile AND a user is logged in
+            <div className="mt-4">
+              <FollowButton targetUserId={uid} /> {/* Pass the UID of the profile being viewed */}
+            </div>
           )}
 
           {isCurrentUserProfile && (
