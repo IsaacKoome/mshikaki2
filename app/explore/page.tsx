@@ -2,18 +2,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, query, getDocs, orderBy } from "firebase/firestore";
-import { db } from "@/lib/firebase"; // Make sure db is imported
+import { collection, query, getDocs, orderBy, doc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth"; // To get the current user for FollowButton
-import FollowButton from "@/components/FollowButton"; // Import FollowButton
+import { useAuth } from "@/lib/auth";
+import FollowButton from "@/components/FollowButton";
 
 interface UserProfilePreview {
   uid: string;
   displayName: string;
   photoURL?: string;
   bio?: string;
-  // Add other fields you want to display, e.g., eventCount
   eventCount?: number;
 }
 
@@ -35,11 +34,19 @@ export default function ExploreUsersPage() {
         const querySnapshot = await getDocs(q);
 
         const fetchedUsers: UserProfilePreview[] = [];
+        const followingUids: Set<string> = new Set();
+
+        // If current user is logged in, fetch who they are following
+        if (currentUser) {
+          const followingSnap = await getDocs(collection(db, "users", currentUser.uid, "following"));
+          followingSnap.forEach(doc => followingUids.add(doc.id));
+        }
+
         querySnapshot.forEach((doc) => {
           const userData = doc.data();
-          // Filter out the current user's own profile from the list
-          if (currentUser && doc.id === currentUser.uid) {
-            return; // Skip current user
+          // Filter out the current user's own profile AND users they already follow
+          if (currentUser && (doc.id === currentUser.uid || followingUids.has(doc.id))) {
+            return; // Skip current user and already followed users
           }
           fetchedUsers.push({
             uid: doc.id,
@@ -58,8 +65,7 @@ export default function ExploreUsersPage() {
       }
     };
 
-    // Fetch users only after auth loading is complete
-    if (!authLoading) {
+    if (!authLoading) { // Fetch users only after auth loading is complete
       fetchAllUsers();
     }
   }, [currentUser, authLoading]); // Re-fetch if currentUser or authLoading changes
@@ -84,50 +90,53 @@ export default function ExploreUsersPage() {
     );
   }
 
-  if (users.length === 0) {
-    return (
-      <div className="text-center p-6 text-gray-600">
-        <h1 className="text-2xl font-bold mb-4 text-rose-600">Explore Users</h1>
-        <p>No other users found yet.</p>
-        {currentUser && <p>Be the first to create an event and share your profile!</p>}
-      </div>
-    );
-  }
-
   return (
     <main className="max-w-4xl mx-auto p-6 space-y-8">
-      <h1 className="text-3xl font-bold text-rose-700 text-center mb-8">Explore Users</h1>
+      <h1 className="text-3xl font-bold text-rose-700 text-center mb-8">
+        {currentUser ? "People you may know" : "Explore All Users"}
+      </h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {users.map((userProfile) => (
-          <div
-            key={userProfile.uid}
-            className="bg-white shadow-lg rounded-xl p-4 flex flex-col items-center text-center space-y-3"
-          >
-            <img
-              src={userProfile.photoURL}
-              alt={`${userProfile.displayName}'s profile`}
-              className="w-20 h-20 rounded-full object-cover border-2 border-rose-400"
-            />
-            <h2 className="text-xl font-semibold text-gray-800">{userProfile.displayName}</h2>
-            {userProfile.bio && <p className="text-sm text-gray-600 italic line-clamp-2">"{userProfile.bio}"</p>}
-            <p className="text-xs text-gray-500">{userProfile.eventCount} Events Created</p>
-
-            <button
-              onClick={() => router.push(`/profile/${userProfile.uid}`)}
-              className="bg-blue-500 text-white px-4 py-2 rounded-full hover:bg-blue-600 transition-colors w-full"
+      {users.length === 0 ? (
+        <div className="text-center p-6 text-gray-600">
+          <p>No other users to show.</p>
+          {currentUser && <p>You might be following everyone already, or no one else has joined yet!</p>}
+          {!currentUser && <p>Sign in to discover people!</p>}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {users.map((userProfile) => (
+            <div
+              key={userProfile.uid}
+              className="bg-white shadow-lg rounded-xl p-4 flex flex-col items-center text-center space-y-3"
             >
-              View Profile
-            </button>
-            {/* Show FollowButton only if current user is logged in */}
-            {currentUser && (
-              <div className="w-full">
-                <FollowButton targetUserId={userProfile.uid} />
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
+              <img
+                src={userProfile.photoURL}
+                alt={`${userProfile.displayName}'s profile`}
+                className="w-20 h-20 rounded-full object-cover border-2 border-rose-400"
+              />
+              <h2 className="text-xl font-semibold text-gray-800">{userProfile.displayName}</h2>
+              {userProfile.bio && <p className="text-sm text-gray-600 italic line-clamp-2">"{userProfile.bio}"</p>}
+              <p className="text-xs text-gray-500">{userProfile.eventCount} Events Created</p>
+
+              <button
+                onClick={() => router.push(`/profile/${userProfile.uid}`)}
+                className="bg-blue-500 text-white px-4 py-2 rounded-full hover:bg-blue-600 transition-colors w-full"
+              >
+                View Profile
+              </button>
+              {/* Show FollowButton only if current user is logged in */}
+              {currentUser && (
+                <div className="w-full">
+                  <FollowButton
+                    targetUserId={userProfile.uid}
+                    targetUserDisplayName={userProfile.displayName}
+                  />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </main>
   );
 }

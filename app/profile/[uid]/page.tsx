@@ -1,21 +1,30 @@
 // app/profile/[uid]/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { doc, getDoc, collection, query, where, getDocs, orderBy } from "firebase/firestore";
+import {
+  collection,
+  query,
+  where,
+  orderBy,
+  getDocs,
+  doc,
+  getDoc,
+  Timestamp, // <<< Ensure Timestamp is imported here for instanceof check
+} from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import EventCard from "@/components/EventCard"; // Assuming you have this component for displaying events
-import { useAuth } from "@/lib/auth"; // To check if it's the current user's profile
-import FollowButton from "@/components/FollowButton"; // <<< ADD THIS IMPORT <<<
+import { useAuth } from "@/lib/auth";
+import EventCard from "@/components/EventCard";
+import FollowButton from "@/components/FollowButton";
 
 interface UserProfile {
   uid: string;
   displayName: string;
   photoURL?: string;
   bio?: string;
-  createdAt?: Date; // Firestore Timestamp will be converted to Date
-  eventCount?: number; // Optional, as we might not always have this
+  createdAt?: Date; // We want this to be a Date object in our state
+  eventCount?: number;
 }
 
 interface EventItem {
@@ -24,15 +33,36 @@ interface EventItem {
   location: string;
   images: string[];
   ownerId: string;
-  eventType: string; // Add eventType to link back to detail page
-  // Add createdAt here if you intend to sort them client-side after fetching
-  createdAt: any; // Assuming it's a Firestore Timestamp or Date
+  eventType: string;
+  createdAt: any; // Firestore Timestamp
 }
+
+interface UserListItemProps {
+  userProfile: UserProfile;
+}
+
+function UserListItem({ userProfile }: UserListItemProps) {
+  const router = useRouter();
+  return (
+    <div
+      className="flex items-center space-x-3 p-2 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+      onClick={() => router.push(`/profile/${userProfile.uid}`)}
+    >
+      <img
+        src={userProfile.photoURL || "/default-avatar.png"}
+        alt={userProfile.displayName}
+        className="w-10 h-10 rounded-full object-cover"
+      />
+      <span className="font-medium text-gray-800">{userProfile.displayName}</span>
+    </div>
+  );
+}
+
 
 export default function UserProfilePage() {
   const router = useRouter();
-  const { uid } = useParams<{ uid: string }>(); // Get the UID from the URL
-  const { user: currentUser, loading: authLoading } = useAuth(); // Current logged-in user
+  const { uid } = useParams<{ uid: string }>();
+  const { user: currentUser, loading: authLoading } = useAuth();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [userEvents, setUserEvents] = useState<EventItem[]>([]);
@@ -40,48 +70,97 @@ export default function UserProfilePage() {
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!uid) {
-      setLoadingProfile(false);
-      setProfileError("User ID is missing from the URL.");
-      return;
-    }
+  const [followersCount, setFollowersCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
+  const [followersList, setFollowersList] = useState<UserProfile[]>([]);
+  const [followingList, setFollowingList] = useState<UserProfile[]>([]);
+  const [loadingFollowData, setLoadingFollowData] = useState(true);
 
-    const fetchUserProfile = async () => {
+
+  const isOwner = currentUser?.uid === uid;
+
+
+  // Fetch User Profile Data
+  useEffect(() => {
+    if (!uid) return;
+
+    const fetchProfile = async () => {
       setLoadingProfile(true);
       setProfileError(null);
       try {
-        const userDocRef = doc(db, "users", uid);
-        const userDocSnap = await getDoc(userDocRef);
+        const userRef = doc(db, "users", uid);
+        const userSnap = await getDoc(userRef);
 
-        if (userDocSnap.exists()) {
-          const userData = userDocSnap.data();
+        if (userSnap.exists()) {
+          const userData = userSnap.data();
+
+          let fetchedCreatedAt: Date | undefined;
+          // Check if createdAt is a Firestore Timestamp object
+          if (userData.createdAt && typeof userData.createdAt.toDate === 'function') {
+            fetchedCreatedAt = userData.createdAt.toDate();
+          }
+          // If it's a string, try to parse it as a Date
+          else if (typeof userData.createdAt === 'string') {
+            try {
+                fetchedCreatedAt = new Date(userData.createdAt);
+                // Check if parsing was successful (e.g., prevents "Invalid Date")
+                if (isNaN(fetchedCreatedAt.getTime())) {
+                    fetchedCreatedAt = undefined; // Set to undefined if parsing failed
+                }
+            } catch (parseError) {
+                console.error("Error parsing createdAt string to Date:", parseError);
+                fetchedCreatedAt = undefined;
+            }
+          }
+          // If it's already a Date object (less common from Firestore unless conversion happened elsewhere)
+          else if (userData.createdAt instanceof Date) {
+              fetchedCreatedAt = userData.createdAt;
+          }
+          // Fallback to undefined if none of the above
+          else {
+              fetchedCreatedAt = undefined;
+          }
+
+
           setProfile({
-            uid: userDocSnap.id,
+            uid: userSnap.id,
             displayName: userData.displayName || "Unknown User",
             photoURL: userData.photoURL,
             bio: userData.bio,
-            createdAt: userData.createdAt?.toDate(), // Convert Firestore Timestamp to Date
+            createdAt: fetchedCreatedAt, // Use the converted/parsed Date object
             eventCount: userData.eventCount || 0,
           });
         } else {
           setProfileError("User profile not found.");
-          setProfile(null); // Clear previous profile if not found
+          setProfile(null);
         }
-      } catch (error) {
-        console.error("Error fetching user profile:", error);
+      } catch (err) {
+        console.error("Error fetching user profile:", err);
         setProfileError("Failed to load user profile.");
       } finally {
         setLoadingProfile(false);
       }
     };
 
+    fetchProfile();
+  }, [uid]);
+
+  // ... (rest of the component, including fetchUserEvents, fetchFollowData, handleFollowChange, etc.)
+
+  // Rest of your UserProfilePage component from previous update
+  // ... (unchanged code for fetching events, follow data, and rendering)
+
+  // Ensure this part is also correctly handled (copy-paste from your component)
+  // Fetch User Events
+  useEffect(() => {
+    if (!uid) return;
+
     const fetchUserEvents = async () => {
       setLoadingEvents(true);
-      try {
-        const eventTypes = ["weddings", "birthdays", "babyshowers"];
-        const allUserEvents: EventItem[] = [];
+      const allUserEvents: EventItem[] = [];
+      const eventTypes = ["weddings", "birthdays", "babyshowers"];
 
+      try {
         for (const type of eventTypes) {
           const q = query(
             collection(db, type),
@@ -96,26 +175,97 @@ export default function UserProfilePage() {
               location: doc.data().location,
               images: doc.data().images || [],
               ownerId: doc.data().ownerId || "",
-              eventType: type, // Store the event type for routing
-              createdAt: doc.data().createdAt, // <<< ENSURE createdAt IS INCLUDED HERE <<<
+              eventType: type,
+              createdAt: doc.data().createdAt,
             });
           });
         }
-        // IMPORTANT: Sort all events by createdAt in descending order after fetching from all collections
         allUserEvents.sort((a, b) => b.createdAt.toDate().getTime() - a.createdAt.toDate().getTime());
         setUserEvents(allUserEvents);
       } catch (error) {
         console.error("Error fetching user events:", error);
-        // Optionally set an error state for events
       } finally {
         setLoadingEvents(false);
       }
     };
 
-
-    fetchUserProfile();
     fetchUserEvents();
-  }, [uid]); // Rerun effect when UID changes
+  }, [uid]);
+
+
+  const fetchFollowData = useCallback(async () => {
+    setLoadingFollowData(true);
+    try {
+      const followersSnap = await getDocs(collection(db, "users", uid, "followers"));
+      setFollowersCount(followersSnap.size);
+      const fetchedFollowersUids = followersSnap.docs.map(doc => doc.id);
+
+      const followingSnap = await getDocs(collection(db, "users", uid, "following"));
+      setFollowingCount(followingSnap.size);
+      const fetchedFollowingUids = followingSnap.docs.map(doc => doc.id);
+
+      if (isOwner) {
+        const fetchDetailedProfiles = async (uids: string[]): Promise<UserProfile[]> => {
+          const profiles: UserProfile[] = [];
+          const profilePromises = uids.map(id => getDoc(doc(db, "users", id)));
+          const profileSnaps = await Promise.all(profilePromises);
+
+          profileSnaps.forEach(userDocSnap => {
+            if (userDocSnap.exists()) {
+              const profileData = userDocSnap.data();
+              let profileCreatedAt: Date | undefined;
+              if (profileData.createdAt && typeof profileData.createdAt.toDate === 'function') {
+                  profileCreatedAt = profileData.createdAt.toDate();
+              } else if (typeof profileData.createdAt === 'string') {
+                  try {
+                      profileCreatedAt = new Date(profileData.createdAt);
+                      if (isNaN(profileCreatedAt.getTime())) profileCreatedAt = undefined;
+                  } catch (e) { profileCreatedAt = undefined; }
+              } else if (profileData.createdAt instanceof Date) {
+                  profileCreatedAt = profileData.createdAt;
+              }
+
+              profiles.push({
+                  uid: userDocSnap.id,
+                  displayName: profileData.displayName || "Unknown User",
+                  photoURL: profileData.photoURL,
+                  bio: profileData.bio,
+                  createdAt: profileCreatedAt,
+                  eventCount: profileData.eventCount || 0,
+              });
+            }
+          });
+          return profiles;
+        };
+
+        setFollowersList(await fetchDetailedProfiles(fetchedFollowersUids));
+        setFollowingList(await fetchDetailedProfiles(fetchedFollowingUids));
+      } else {
+        setFollowersList([]);
+        setFollowingList([]);
+      }
+
+    } catch (error) {
+      console.error("Error fetching follow data:", error);
+    } finally {
+      setLoadingFollowData(false);
+    }
+  }, [uid, isOwner]);
+
+  useEffect(() => {
+    if (!uid) return;
+    fetchFollowData();
+  }, [uid, fetchFollowData]);
+
+
+  const handleFollowChange = (newStatus: boolean) => {
+    if (newStatus) {
+      setFollowersCount(prev => prev + 1);
+    } else {
+      setFollowersCount(prev => Math.max(0, prev - 1));
+    }
+  };
+
 
   if (loadingProfile || authLoading) {
     return (
@@ -168,27 +318,71 @@ export default function UserProfilePage() {
             Events Created: {profile.eventCount !== undefined ? profile.eventCount : "..."}
           </p>
 
-          {/* FOLLOW BUTTON INTEGRATION */}
-          {!isCurrentUserProfile && currentUser && ( // Only show if not current user's profile AND a user is logged in
+          {!loadingFollowData && (
+            <div className="flex justify-center md:justify-start space-x-4 mt-2">
+              <p className="text-sm text-gray-700 font-semibold">{followersCount} Followers</p>
+              <p className="text-sm text-gray-700 font-semibold">{followingCount} Following</p>
+            </div>
+          )}
+
+          {!isCurrentUserProfile && currentUser && (
             <div className="mt-4">
-              <FollowButton targetUserId={uid} /> {/* Pass the UID of the profile being viewed */}
+              <FollowButton
+                targetUserId={uid}
+                targetUserDisplayName={profile.displayName}
+                onFollowChange={handleFollowChange}
+              />
             </div>
           )}
 
           {isCurrentUserProfile && (
-            <button
-              onClick={() => router.push(`/profile/${uid}/edit`)} // Or open a modal for editing
-              className="mt-4 bg-purple-500 text-white px-5 py-2 rounded-full hover:bg-purple-600 transition-colors"
-            >
-              Edit Profile
-            </button>
+            <div className="mt-4">
+              <button
+                onClick={() => router.push(`/profile/${uid}/edit`)}
+                className="bg-purple-500 text-white px-5 py-2 rounded-full hover:bg-purple-600 transition-colors"
+              >
+                Edit Profile
+              </button>
+            </div>
           )}
         </div>
       </div>
 
+      {isOwner && !loadingFollowData && (
+        <section className="space-y-6 bg-white shadow-lg rounded-xl p-6">
+          <h2 className="text-2xl font-bold text-rose-600">Your Network</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <h3 className="text-xl font-semibold mb-3">People Following You ({followersList.length})</h3>
+              {followersList.length === 0 ? (
+                <p className="text-gray-400 italic">No one is following you yet.</p>
+              ) : (
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                  {followersList.map(follower => (
+                    <UserListItem key={follower.uid} userProfile={follower} />
+                  ))}
+                </div>
+              )}
+            </div>
+            <div>
+              <h3 className="text-xl font-semibold mb-3">People You Follow ({followingList.length})</h3>
+              {followingList.length === 0 ? (
+                <p className="text-gray-400 italic">You are not following anyone yet.</p>
+              ) : (
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                  {followingList.map(followed => (
+                    <UserListItem key={followed.uid} userProfile={followed} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
       <section className="space-y-4">
         <h2 className="text-2xl font-bold text-rose-600">
-          {isCurrentUserProfile ? "My Events" : `${profile.displayName}'s Events`}
+          {isOwner ? "Your Events" : `${profile.displayName}'s Events`}
         </h2>
         {loadingEvents ? (
           <div className="flex items-center space-x-2 text-gray-500">
@@ -200,7 +394,7 @@ export default function UserProfilePage() {
           </div>
         ) : userEvents.length === 0 ? (
           <p className="text-gray-400 italic">
-            {isCurrentUserProfile ? "You haven't created any events yet." : `${profile.displayName} hasn't created any events yet.`}
+            {isOwner ? "You haven't created any events yet." : `${profile.displayName} hasn't created any events yet.`}
           </p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
