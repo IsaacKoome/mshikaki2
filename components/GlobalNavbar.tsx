@@ -14,8 +14,8 @@ export default function GlobalNavbar() {
           Mshikaki Events
         </Link>
         <div>
-          <Link href="/explore" className="ml-4 hover:underline">
-            Explore Users
+          <Link href="/explore" className="ml-4 hover:bg-blue-600">
+            🔍Explore Users
           </Link>
 
           {user && (

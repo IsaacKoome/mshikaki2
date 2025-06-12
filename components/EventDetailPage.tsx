@@ -214,12 +214,12 @@ export default function EventDetailPage({ id, collectionName }: Props) {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogTrigger asChild>
           <Button className="bg-rose-600 hover:bg-rose-700 w-full sm:w-auto">
-            Contribute Now
+            Send Gift
           </Button>
         </DialogTrigger>
         <DialogContent className="space-y-4 max-w-sm w-full mx-auto p-6 rounded-xl shadow-lg z-50 bg-white">
           <DialogTitle className="text-center text-rose-600 font-bold text-lg">
-            🎁 Make a Contribution
+            🎁 Send your Gift
           </DialogTitle>
 
           <Input
