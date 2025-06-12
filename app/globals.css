@@ -9,6 +9,16 @@ body {
 
 /* In your globals.css */
 
+/* Hide scrollbar for elements with scrollbar-hide class */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
 /* Custom scrollbar for webkit browsers (Chrome, Safari) */
 .custom-scrollbar::-webkit-scrollbar {
   width: 8px; /* Width of the vertical scrollbar */

@@ -6,8 +6,9 @@ import { collection, getDocs, query, orderBy } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import EventCard from "@/components/EventCard";
 import { useRouter } from "next/navigation";
-import Link from "next/link"; // Make sure Link is imported
-import { useAuth } from "@/lib/auth"; // Make sure useAuth is imported
+import Link from "next/link";
+// useAuth is no longer imported here as auth status and actions are handled by GlobalNavbar and /login page
+// import { useAuth } from "@/lib/auth";
 
 interface EventItem {
   id: string;
@@ -15,11 +16,11 @@ interface EventItem {
   location: string;
   images: string[];
   ownerId: string;
+  eventType: string;
 }
 
 export default function HomePage() {
   const router = useRouter();
-  const { user, loading: authLoading, loginWithGoogle, logout } = useAuth(); // Destructure user, loading, loginWithGoogle, logout
 
   const [weddingEvents, setWeddingEvents] = useState<EventItem[]>([]);
   const [birthdayEvents, setBirthdayEvents] = useState<EventItem[]>([]);
@@ -44,6 +45,7 @@ export default function HomePage() {
           location: doc.data().location,
           images: doc.data().images || [],
           ownerId: doc.data().ownerId || "",
+          eventType: type,
         }));
         setter(events);
       } catch (error) {
@@ -58,6 +60,7 @@ export default function HomePage() {
     fetchEvents("babyshowers", setBabyShowerEvents, setIsLoadingBabyShowers);
   }, []);
 
+
   const handleViewEvent = (type: string, id: string) => {
     router.push(`/events/${type}/${id}`);
   };
@@ -68,18 +71,18 @@ export default function HomePage() {
     events: EventItem[],
     isLoading: boolean
   ) => (
-    <section className="space-y-4">
-      <h2 className="text-xl font-semibold">{label}</h2>
+    <section className="space-y-4 bg-white p-6 rounded-xl shadow-lg">
+      <h2 className="text-2xl font-bold text-rose-600 border-b pb-2 mb-4">{label}</h2>
       {isLoading ? (
-        <div className="flex items-center space-x-2 text-gray-500">
-          <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <div className="flex items-center justify-center space-x-2 text-gray-500 py-8">
+          <svg className="animate-spin h-7 w-7 mr-3 text-rose-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3.5-3.5L12 0v4a8 8 0 100 16v-4l-3.5 3.5L12 24v-4a8 8 0 01-8-8z" />
           </svg>
           <span className="italic">Loading {label.toLowerCase()} events...</span>
         </div>
       ) : events.length === 0 ? (
-        <p className="text-gray-400 italic">No {label.toLowerCase()} events found yet.</p>
+        <p className="text-gray-400 italic text-center py-8">No {label.toLowerCase()} events found yet.</p>
       ) : (
         <div className="flex space-x-4 overflow-x-auto scrollbar-hide pb-2">
           {events.map((event) => (
@@ -87,7 +90,7 @@ export default function HomePage() {
               <EventCard
                 title={event.title}
                 location={event.location}
-                imageUrl={event.images[0] || "https://via.placeholder.com/400x250?text=No+Image"}
+                imageUrl={event.images[0] || "https://placehold.co/400x250/E0E0E0/333333?text=No+Image"}
                 onViewEvent={() => handleViewEvent(type, event.id)}
                 eventId={event.id}
                 mediaUrls={event.images}
@@ -101,59 +104,20 @@ export default function HomePage() {
   );
 
   return (
-    <main className="p-6 max-w-7xl mx-auto space-y-10">
-      <div className="flex flex-col md:flex-row md:justify-between md:items-center space-y-4 md:space-y-0">
-        <h1 className="bg-rose-600 text-white px-4 py-2 text-2xl font-bold rounded-xl">
-          🎉 Discover Events
-        </h1>
+    <main className="p-6 max-w-7xl mx-auto space-y-10 bg-gray-100 rounded-lg shadow-inner py-10">
+      {/* Moved "Discover Events" heading to be just a general section heading */}
+      <h1 className="text-3xl font-bold text-rose-700 text-center mb-8">Discover Events</h1>
 
-        <div className="flex flex-col items-end gap-2">
-          {authLoading ? (
-            <p className="text-gray-500 italic">Loading user...</p>
-          ) : user ? (
-            <div className="flex items-center gap-2">
-              {user.photoURL && (
-                // Wrap the image in a Link component
-                <Link href={`/profile/${user.uid}`}>
-                  <img
-                    src={user.photoURL}
-                    alt="avatar"
-                    className="w-8 h-8 rounded-full cursor-pointer hover:ring-2 hover:ring-rose-400 transition-all" // Added cursor and hover styles
-                    title="View Profile" // Added a tooltip for better UX
-                  />
-                </Link>
-              )}
-              {/* Also make the "Welcome, User" text a link */}
-              <Link href={`/profile/${user.uid}`} className="text-sm font-medium hover:underline">
-                Welcome, {user.displayName || "User"}
-              </Link>
-              <button
-                onClick={logout}
-                className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 text-sm"
-              >
-                Sign Out
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={loginWithGoogle}
-              className="bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700"
-            >
-              Sign In with Google
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        <Link href="/add-event/add-wedding" className="bg-emerald-400 text-white px-4 py-2 rounded-xl hover:bg-emerald-500">
-          + 💖 Wedding
+      {/* Event Category Buttons */}
+      <div className="flex flex-wrap justify-center gap-4 p-4 bg-white rounded-xl shadow-lg">
+        <Link href="/add-event/add-wedding" className="flex items-center justify-center bg-emerald-500 text-white font-bold px-6 py-3 rounded-full hover:bg-emerald-600 transition-all duration-200 text-lg shadow-md">
+          <span role="img" aria-label="wedding ring" className="mr-2">💖</span> Add Wedding
         </Link>
-        <Link href="/add-event/add-birthday" className="bg-blue-500 text-white px-4 py-2 rounded-xl hover:bg-blue-600">
-          + 🎂 Birthday
+        <Link href="/add-event/add-birthday" className="flex items-center justify-center bg-blue-500 text-white font-bold px-6 py-3 rounded-full hover:bg-blue-600 transition-all duration-200 text-lg shadow-md">
+          <span role="img" aria-label="birthday cake" className="mr-2">🎂</span> Add Birthday
         </Link>
-        <Link href="/add-event/add-babyshower" className="bg-purple-500 text-white px-4 py-2 rounded-xl hover:bg-purple-600">
-          + 👶 Baby Shower
+        <Link href="/add-event/add-babyshower" className="flex items-center justify-center bg-purple-500 text-white font-bold px-6 py-3 rounded-full hover:bg-purple-600 transition-all duration-200 text-lg shadow-md">
+          <span role="img" aria-label="baby bottle" className="mr-2">👶</span> Add Baby Shower
         </Link>
       </div>
 
