@@ -43,7 +43,7 @@ export default function HomePage() {
           location: doc.data().location,
           images: doc.data().images || [],
           ownerId: doc.data().ownerId || "",
-          eventType: type,
+          eventType: type, // Pass eventType to EventCard
         }));
         setter(events);
       } catch (error) {
@@ -86,6 +86,7 @@ export default function HomePage() {
           {events.map((event) => (
             <div key={event.id} className="min-w-[320px]">
               <EventCard
+                key={event.id}
                 title={event.title}
                 location={event.location}
                 imageUrl={event.images[0] || "https://placehold.co/400x280/E0E0E0/333333?text=No+Image"}
@@ -93,6 +94,8 @@ export default function HomePage() {
                 eventId={event.id}
                 mediaUrls={event.images}
                 ownerId={event.ownerId}
+                eventType={event.eventType} // Pass eventType
+                allowDelete={false} // <<< Explicitly hide delete button on homepage
               />
             </div>
           ))}
@@ -105,21 +108,20 @@ export default function HomePage() {
     <main className="p-6 max-w-7xl mx-auto space-y-10 bg-gray-100 rounded-lg shadow-inner py-10">
       <h1 className="text-3xl font-bold text-rose-700 text-center mb-8">Discover Events</h1>
 
-      {/* Event Category Buttons - Now Responsive */}
       <div className="flex flex-wrap justify-center gap-4 p-4 bg-white rounded-xl shadow-lg">
         <Link href="/add-event/add-wedding" className="flex items-center justify-center bg-emerald-500 text-white font-bold
           px-4 py-2 text-base rounded-full hover:bg-emerald-600 transition-all duration-200 shadow-md
-          sm:px-6 sm:py-3 sm:text-lg"> {/* Added responsive classes */}
+          sm:px-6 sm:py-3 sm:text-lg">
           <span role="img" aria-label="wedding ring" className="mr-2">💖</span> Add Wedding
         </Link>
         <Link href="/add-event/add-birthday" className="flex items-center justify-center bg-blue-500 text-white font-bold
           px-4 py-2 text-base rounded-full hover:bg-blue-600 transition-all duration-200 shadow-md
-          sm:px-6 sm:py-3 sm:text-lg"> {/* Added responsive classes */}
+          sm:px-6 sm:py-3 sm:text-lg">
           <span role="img" aria-label="birthday cake" className="mr-2">🎂</span> Add Birthday
         </Link>
         <Link href="/add-event/add-babyshower" className="flex items-center justify-center bg-purple-500 text-white font-bold
           px-4 py-2 text-base rounded-full hover:bg-purple-600 transition-all duration-200 shadow-md
-          sm:px-6 sm:py-3 sm:text-lg"> {/* Added responsive classes */}
+          sm:px-6 sm:py-3 sm:text-lg">
           <span role="img" aria-label="baby bottle" className="mr-2">👶</span> Add Baby Shower
         </Link>
       </div>

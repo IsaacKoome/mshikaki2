@@ -11,7 +11,7 @@ import {
   getDocs,
   doc,
   getDoc,
-  Timestamp, // <<< Ensure Timestamp is imported here for instanceof check
+  Timestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth";
@@ -23,7 +23,7 @@ interface UserProfile {
   displayName: string;
   photoURL?: string;
   bio?: string;
-  createdAt?: Date; // We want this to be a Date object in our state
+  createdAt?: Date;
   eventCount?: number;
 }
 
@@ -33,8 +33,8 @@ interface EventItem {
   location: string;
   images: string[];
   ownerId: string;
-  eventType: string;
-  createdAt: any; // Firestore Timestamp
+  eventType: string; // Ensure this is present and correct
+  createdAt: any;
 }
 
 interface UserListItemProps {
@@ -95,29 +95,21 @@ export default function UserProfilePage() {
           const userData = userSnap.data();
 
           let fetchedCreatedAt: Date | undefined;
-          // Check if createdAt is a Firestore Timestamp object
           if (userData.createdAt && typeof userData.createdAt.toDate === 'function') {
             fetchedCreatedAt = userData.createdAt.toDate();
-          }
-          // If it's a string, try to parse it as a Date
-          else if (typeof userData.createdAt === 'string') {
+          } else if (typeof userData.createdAt === 'string') {
             try {
                 fetchedCreatedAt = new Date(userData.createdAt);
-                // Check if parsing was successful (e.g., prevents "Invalid Date")
                 if (isNaN(fetchedCreatedAt.getTime())) {
-                    fetchedCreatedAt = undefined; // Set to undefined if parsing failed
+                    fetchedCreatedAt = undefined;
                 }
             } catch (parseError) {
                 console.error("Error parsing createdAt string to Date:", parseError);
                 fetchedCreatedAt = undefined;
             }
-          }
-          // If it's already a Date object (less common from Firestore unless conversion happened elsewhere)
-          else if (userData.createdAt instanceof Date) {
+          } else if (userData.createdAt instanceof Date) {
               fetchedCreatedAt = userData.createdAt;
-          }
-          // Fallback to undefined if none of the above
-          else {
+          } else {
               fetchedCreatedAt = undefined;
           }
 
@@ -127,7 +119,7 @@ export default function UserProfilePage() {
             displayName: userData.displayName || "Unknown User",
             photoURL: userData.photoURL,
             bio: userData.bio,
-            createdAt: fetchedCreatedAt, // Use the converted/parsed Date object
+            createdAt: fetchedCreatedAt,
             eventCount: userData.eventCount || 0,
           });
         } else {
@@ -145,12 +137,7 @@ export default function UserProfilePage() {
     fetchProfile();
   }, [uid]);
 
-  // ... (rest of the component, including fetchUserEvents, fetchFollowData, handleFollowChange, etc.)
 
-  // Rest of your UserProfilePage component from previous update
-  // ... (unchanged code for fetching events, follow data, and rendering)
-
-  // Ensure this part is also correctly handled (copy-paste from your component)
   // Fetch User Events
   useEffect(() => {
     if (!uid) return;
@@ -175,12 +162,16 @@ export default function UserProfilePage() {
               location: doc.data().location,
               images: doc.data().images || [],
               ownerId: doc.data().ownerId || "",
-              eventType: type,
+              eventType: type, // Ensure eventType is always included here
               createdAt: doc.data().createdAt,
             });
           });
         }
-        allUserEvents.sort((a, b) => b.createdAt.toDate().getTime() - a.createdAt.toDate().getTime());
+        allUserEvents.sort((a, b) => {
+          const dateA = (a.createdAt instanceof Timestamp) ? a.createdAt.toDate() : (a.createdAt instanceof Date ? a.createdAt : new Date(0));
+          const dateB = (b.createdAt instanceof Timestamp) ? b.createdAt.toDate() : (b.createdAt instanceof Date ? b.createdAt : new Date(0));
+          return dateB.getTime() - dateA.getTime();
+        });
         setUserEvents(allUserEvents);
       } catch (error) {
         console.error("Error fetching user events:", error);
@@ -408,6 +399,8 @@ export default function UserProfilePage() {
                 eventId={event.id}
                 mediaUrls={event.images}
                 ownerId={event.ownerId}
+                eventType={event.eventType} // <<< Pass eventType here
+                allowDelete={isOwner} // <<< Pass allowDelete based on isOwner
               />
             ))}
           </div>
