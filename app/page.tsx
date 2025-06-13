@@ -7,8 +7,6 @@ import { db } from "@/lib/firebase";
 import EventCard from "@/components/EventCard";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-// useAuth is no longer imported here as auth status and actions are handled by GlobalNavbar and /login page
-// import { useAuth } from "@/lib/auth";
 
 interface EventItem {
   id: string;
@@ -84,13 +82,13 @@ export default function HomePage() {
       ) : events.length === 0 ? (
         <p className="text-gray-400 italic text-center py-8">No {label.toLowerCase()} events found yet.</p>
       ) : (
-        <div className="flex space-x-4 overflow-x-auto scrollbar-hide pb-2">
+        <div className="flex space-x-6 overflow-x-auto scrollbar-hide pb-2">
           {events.map((event) => (
-            <div key={event.id} className="min-w-[280px]">
+            <div key={event.id} className="min-w-[320px]">
               <EventCard
                 title={event.title}
                 location={event.location}
-                imageUrl={event.images[0] || "https://placehold.co/400x250/E0E0E0/333333?text=No+Image"}
+                imageUrl={event.images[0] || "https://placehold.co/400x280/E0E0E0/333333?text=No+Image"}
                 onViewEvent={() => handleViewEvent(type, event.id)}
                 eventId={event.id}
                 mediaUrls={event.images}
@@ -105,18 +103,23 @@ export default function HomePage() {
 
   return (
     <main className="p-6 max-w-7xl mx-auto space-y-10 bg-gray-100 rounded-lg shadow-inner py-10">
-      {/* Moved "Discover Events" heading to be just a general section heading */}
       <h1 className="text-3xl font-bold text-rose-700 text-center mb-8">Discover Events</h1>
 
-      {/* Event Category Buttons */}
+      {/* Event Category Buttons - Now Responsive */}
       <div className="flex flex-wrap justify-center gap-4 p-4 bg-white rounded-xl shadow-lg">
-        <Link href="/add-event/add-wedding" className="flex items-center justify-center bg-emerald-500 text-white font-bold px-6 py-3 rounded-full hover:bg-emerald-600 transition-all duration-200 text-lg shadow-md">
+        <Link href="/add-event/add-wedding" className="flex items-center justify-center bg-emerald-500 text-white font-bold
+          px-4 py-2 text-base rounded-full hover:bg-emerald-600 transition-all duration-200 shadow-md
+          sm:px-6 sm:py-3 sm:text-lg"> {/* Added responsive classes */}
           <span role="img" aria-label="wedding ring" className="mr-2">💖</span> Add Wedding
         </Link>
-        <Link href="/add-event/add-birthday" className="flex items-center justify-center bg-blue-500 text-white font-bold px-6 py-3 rounded-full hover:bg-blue-600 transition-all duration-200 text-lg shadow-md">
+        <Link href="/add-event/add-birthday" className="flex items-center justify-center bg-blue-500 text-white font-bold
+          px-4 py-2 text-base rounded-full hover:bg-blue-600 transition-all duration-200 shadow-md
+          sm:px-6 sm:py-3 sm:text-lg"> {/* Added responsive classes */}
           <span role="img" aria-label="birthday cake" className="mr-2">🎂</span> Add Birthday
         </Link>
-        <Link href="/add-event/add-babyshower" className="flex items-center justify-center bg-purple-500 text-white font-bold px-6 py-3 rounded-full hover:bg-purple-600 transition-all duration-200 text-lg shadow-md">
+        <Link href="/add-event/add-babyshower" className="flex items-center justify-center bg-purple-500 text-white font-bold
+          px-4 py-2 text-base rounded-full hover:bg-purple-600 transition-all duration-200 shadow-md
+          sm:px-6 sm:py-3 sm:text-lg"> {/* Added responsive classes */}
           <span role="img" aria-label="baby bottle" className="mr-2">👶</span> Add Baby Shower
         </Link>
       </div>
