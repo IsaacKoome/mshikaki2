@@ -12,7 +12,7 @@ export default function GlobalNavbar() {
       <div className="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-center space-y-3 sm:space-y-0">
         {/* Brand/Logo */}
         <Link href="/" className="text-3xl font-extrabold tracking-tight text-white hover:text-rose-100 transition-colors">
-          Mshikaki Events
+          🎉🎈Mshikaki Events🎈🎉
         </Link>
 
         {/* Navigation and Auth Actions */}
