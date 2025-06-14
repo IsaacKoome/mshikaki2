@@ -1,3 +1,5 @@
+// app/events/birthdays/[id]/page.tsx
+
 import EventDetailPage from "@/components/EventDetailPage";
 
 export default function BirthdayEventPage({ params }: { params: { id: string } }) {

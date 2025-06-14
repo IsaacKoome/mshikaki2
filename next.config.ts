@@ -1,3 +1,4 @@
+// next.config.ts
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
@@ -37,6 +38,12 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "utfs.io",
         pathname: "/**",
+      },
+      // NEW: Allow images from Google user content for profile pictures
+      {
+        protocol: "https",
+        hostname: "lh3.googleusercontent.com",
+        pathname: "/**", // Allows any path under this hostname
       },
     ],
   },

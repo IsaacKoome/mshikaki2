@@ -1,20 +1,23 @@
 // EventDetailPage.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   doc,
   getDoc,
   collection,
   query,
   where,
-  updateDoc, // Import updateDoc for adding media
+  updateDoc,
   onSnapshot,
   Timestamp,
-  arrayUnion, // Import arrayUnion for adding to arrays
+  arrayUnion,
+  addDoc,
+  orderBy,
+  limit,
 } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage"; // For uploading new media
-import { v4 as uuidv4 } from "uuid"; // For unique filenames
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { v4 as uuidv4 } from "uuid";
 import { db, storage } from "@/lib/firebase";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -33,9 +36,12 @@ import {
   InfoIcon,
   ChevronDownIcon,
   ArrowLeftIcon,
-  ImageIcon, // For upload media section
-  VideoIcon, // For upload media section
-  UploadCloudIcon // For upload button
+  ImageIcon,
+  VideoIcon,
+  UploadCloudIcon,
+  MessageCircleIcon,
+  SendIcon,
+  PlusIcon,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import {
@@ -43,6 +49,18 @@ import {
   CollapsibleTrigger,
   CollapsibleContent,
 } from "@/components/ui/collapsible";
+
+interface CommunityMessage {
+  id: string;
+  senderId: string;
+  senderDisplayName: string;
+  senderPhotoURL?: string;
+  timestamp: Timestamp;
+  type: 'text' | 'image' | 'video' | 'file';
+  content?: string;
+  mediaUrl?: string;
+  fileName?: string;
+}
 
 interface EventData {
   title: string;
@@ -91,11 +109,30 @@ export default function EventDetailPage({ id, collectionName }: Props) {
   const [mpesaMessage, setMpesaMessage] = useState<string | null>(null);
   const [isSubmittingGift, setIsSubmittingGift] = useState(false);
 
-  // New states for additional media uploads
   const [newImages, setNewImages] = useState<FileList | null>(null);
   const [newVideos, setNewVideos] = useState<FileList | null>(null);
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [uploadMediaMessage, setUploadMediaMessage] = useState<string | null>(null);
+
+  const [chatMessage, setChatMessage] = useState<string>('');
+  const [chatMessages, setChatMessages] = useState<CommunityMessage[]>([]);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const [selectedChatImage, setSelectedChatImage] = useState<File | null>(null);
+  const [selectedChatVideo, setSelectedChatVideo] = useState<File | null>(null);
+  const [isSendingChatMedia, setIsSendingChatMedia] = useState(false);
+
+
+  // Scroll to bottom of chat whenever messages change
+  useEffect(() => {
+    const chatContainer = messagesEndRef.current?.parentElement;
+    if (chatContainer) {
+        const isScrolledToBottom = chatContainer.scrollHeight - chatContainer.clientHeight <= chatContainer.scrollTop + 100;
+        if (isScrolledToBottom || (chatMessages.length > 0 && chatMessages[chatMessages.length - 1].senderId === user?.uid)) {
+            messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        }
+    }
+  }, [chatMessages, user?.uid]);
 
 
   useEffect(() => {
@@ -145,10 +182,33 @@ export default function EventDetailPage({ id, collectionName }: Props) {
       return unsub;
     };
 
+    const fetchChatMessages = () => {
+        const chatRef = collection(db, collectionName, id, "community_messages");
+        const q = query(chatRef, orderBy("timestamp", "asc"));
+
+        const unsub = onSnapshot(q, (snapshot) => {
+            const messages = snapshot.docs.map(docSnapshot => ({
+                id: docSnapshot.id,
+                ...docSnapshot.data()
+            })) as CommunityMessage[];
+            setChatMessages(messages);
+        }, (error) => {
+            console.error("Error fetching chat messages:", error);
+        });
+        return unsub;
+    };
+
+
     fetchEvent();
-    const unsub = fetchContributions();
-    return () => unsub();
-  }, [id, collectionName]);
+    const unsubContributions = fetchContributions();
+    const unsubChat = fetchChatMessages();
+
+    return () => {
+        unsubContributions();
+        unsubChat();
+    };
+  }, [id, collectionName, user?.uid]);
+
 
   useEffect(() => {
     if (user) {
@@ -220,8 +280,7 @@ export default function EventDetailPage({ id, collectionName }: Props) {
     setDialogOpen(false);
   };
 
-  // Function to upload new media
-  const uploadFiles = async (files: FileList, folder: string): Promise<string[]> => {
+  const uploadFiles = async (files: FileList | File[], folder: string): Promise<string[]> => {
     const urls: string[] = [];
     for (const file of Array.from(files)) {
       const fileRef = ref(storage, `${folder}/${uuidv4()}-${file.name}`);
@@ -268,21 +327,128 @@ export default function EventDetailPage({ id, collectionName }: Props) {
     }
   };
 
+  // FIX: Refined handleSendMessage to handle undefined values correctly
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) {
+      alert("Please sign in to send messages.");
+      return;
+    }
+
+    let messageType: CommunityMessage['type'] = 'text';
+    let uploadedMediaUrl: string | null = null; // Use null initially, or keep undefined and handle it
+    let uploadedFileName: string | null = null;
+    let messageContent: string | null = null;
+
+    setIsSendingChatMedia(true);
+
+    try {
+        if (selectedChatImage) {
+            messageType = 'image';
+            const uploadedUrls = await uploadFiles([selectedChatImage], 'chat_images');
+            if (uploadedUrls.length > 0) {
+                uploadedMediaUrl = uploadedUrls[0];
+                uploadedFileName = selectedChatImage.name;
+            } else {
+                throw new Error("Image upload failed or returned no URL.");
+            }
+            if (chatMessage.trim() !== '') { // Optional caption for image
+                messageContent = chatMessage.trim();
+            }
+        } else if (selectedChatVideo) {
+            messageType = 'video';
+            const uploadedUrls = await uploadFiles([selectedChatVideo], 'chat_videos');
+            if (uploadedUrls.length > 0) {
+                uploadedMediaUrl = uploadedUrls[0];
+                uploadedFileName = selectedChatVideo.name;
+            } else {
+                throw new Error("Video upload failed or returned no URL.");
+            }
+            if (chatMessage.trim() !== '') { // Optional caption for video
+                messageContent = chatMessage.trim();
+            }
+        } else if (chatMessage.trim() !== '') {
+            // Pure text message with content
+            messageType = 'text';
+            messageContent = chatMessage.trim();
+        } else {
+            alert("Please enter a message or select an image/video to send.");
+            return; // Exit if nothing valid to send
+        }
+
+        const chatRef = collection(db, collectionName, id, "community_messages");
+
+        // Construct the payload dynamically, only including fields if they have a non-null/non-undefined value
+        const messagePayload: { [key: string]: any } = {
+            senderId: user.uid,
+            senderDisplayName: user.displayName || "Anonymous",
+            timestamp: Timestamp.now(),
+            type: messageType,
+        };
+
+        if (user.photoURL) {
+            messagePayload.senderPhotoURL = user.photoURL;
+        }
+        if (messageContent !== null) { // Only add content if it's not null
+            messagePayload.content = messageContent;
+        }
+        if (uploadedMediaUrl !== null) { // Only add mediaUrl if it's not null
+            messagePayload.mediaUrl = uploadedMediaUrl;
+        }
+        if (uploadedFileName !== null) { // Only add fileName if it's not null
+            messagePayload.fileName = uploadedFileName;
+        }
+
+        await addDoc(chatRef, messagePayload);
+
+        // Clear inputs after sending
+        setChatMessage('');
+        setSelectedChatImage(null);
+        setSelectedChatVideo(null);
+        // Clear native file input elements
+        const chatImageUploadInput = document.getElementById('chatImageUpload') as HTMLInputElement;
+        if (chatImageUploadInput) chatImageUploadInput.value = '';
+        const chatVideoUploadInput = document.getElementById('chatVideoUpload') as HTMLInputElement;
+        if (chatVideoUploadInput) chatVideoUploadInput.value = '';
+
+    } catch (error) {
+        console.error("Error sending message:", error);
+        alert(`Failed to send message: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+        setIsSendingChatMedia(false);
+    }
+  };
+
+  const handleChatImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedChatImage(e.target.files[0]);
+      setSelectedChatVideo(null); // Clear video if image is selected
+      setChatMessage(''); // Clear text message if image is selected
+      (document.getElementById('chatVideoUpload') as HTMLInputElement).value = '';
+    } else {
+      setSelectedChatImage(null);
+    }
+  };
+
+  const handleChatVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedChatVideo(e.target.files[0]);
+      setSelectedChatImage(null); // Clear image if video is selected
+      setChatMessage(''); // Clear text message if video is selected
+      (document.getElementById('chatImageUpload') as HTMLInputElement).value = '';
+    } else {
+      setSelectedChatVideo(null);
+    }
+  };
+
 
   if (loading) return <p className="p-6 text-center text-gray-500">Loading event details...</p>;
   if (!event) return <p className="p-6 text-center text-red-500">Event not found. It might have been deleted or the URL is incorrect.</p>;
 
   const goal = event.goal || 100000;
   const progress = Math.min((contributionsTotal / goal) * 100, 100);
-  const isOwner = user?.uid === event.ownerId; // Determine if current user is the owner
+  const isOwner = user?.uid === event.ownerId;
 
-  // --- DEBUGGING LOGS ---
-  console.log("Current User UID:", user?.uid);
-  console.log("Event Owner ID:", event.ownerId);
-  console.log("Is current user the owner (isOwner)?", isOwner);
-  // --- END DEBUGGING LOGS ---
-
-  // Decide which media to feature as the main visual
   const featuredMediaUrl = event.images && event.images.length > 0 ? event.images[0] :
                            (event.videos && event.videos.length > 0 ? event.videos[0] : null);
   const featuredMediaType = featuredMediaUrl === event.images?.[0] ? 'image' : 'video';
@@ -327,14 +493,14 @@ export default function EventDetailPage({ id, collectionName }: Props) {
                         alt={`Featured event image for ${event.title}`}
                         fill
                         priority
-                        className="object-contain bg-gray-900" // Use object-contain to show full image, dark background for letterboxing
+                        className="object-contain bg-gray-900"
                         sizes="100vw"
                     />
                 ) : (
                     <video
                         src={featuredMediaUrl}
                         controls
-                        className="w-full h-full object-contain bg-gray-900" // Use object-contain for full video
+                        className="w-full h-full object-contain bg-gray-900"
                         aria-label={`Featured event video for ${event.title}`}
                         preload="metadata"
                     >
@@ -613,6 +779,176 @@ export default function EventDetailPage({ id, collectionName }: Props) {
             )}
           </ul>
         </section>
+
+        {/* Event Community Chat Section */}
+        <section className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
+            <h2 className="text-2xl font-bold text-purple-700 mb-4 flex items-center gap-3">
+                <MessageCircleIcon className="w-7 h-7 text-purple-600" /> Event Community Chat
+            </h2>
+
+            {/* Chat Messages Display Area */}
+            <div className="h-96 overflow-y-auto border border-gray-200 rounded-lg p-4 mb-4 bg-gray-50 custom-scrollbar">
+                {chatMessages.length === 0 ? (
+                    <p className="text-gray-500 italic text-center py-8">
+                        No messages yet. Be the first to start a conversation!
+                    </p>
+                ) : (
+                    chatMessages.map((msg) => (
+                        <div
+                            key={msg.id}
+                            className={`flex items-start gap-3 mb-4 ${msg.senderId === user?.uid ? 'justify-end' : 'justify-start'}`}
+                        >
+                            {msg.senderId !== user?.uid && (
+                                <Image
+                                    src={msg.senderPhotoURL || '/default-avatar.png'}
+                                    alt={msg.senderDisplayName}
+                                    width={32}
+                                    height={32}
+                                    className="rounded-full object-cover border-2 border-gray-300"
+                                />
+                            )}
+                            <div className={`flex flex-col max-w-[75%] p-3 rounded-xl shadow-sm ${
+                                msg.senderId === user?.uid
+                                    ? 'bg-purple-600 text-white rounded-br-none'
+                                    : 'bg-gray-200 text-gray-800 rounded-bl-none'
+                            }`}>
+                                <span className={`text-xs font-bold mb-1 ${msg.senderId === user?.uid ? 'text-purple-100' : 'text-gray-600'}`}>
+                                    {msg.senderDisplayName} {msg.senderId === event.ownerId && <span className="text-xs bg-yellow-400 text-yellow-900 px-1 rounded-full font-semibold">ADMIN</span>}
+                                </span>
+                                {/* Render content based on message type */}
+                                {msg.type === 'text' && msg.content && (
+                                    <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
+                                )}
+                                {msg.type === 'image' && msg.mediaUrl && (
+                                    <div className="relative w-48 h-32 md:w-64 md:h-48 rounded-lg overflow-hidden border border-gray-300 mb-1">
+                                        <Image
+                                            src={msg.mediaUrl}
+                                            alt="Shared image"
+                                            fill
+                                            className="object-cover"
+                                            sizes="(max-width: 768px) 100vw, 50vw"
+                                        />
+                                    </div>
+                                )}
+                                {msg.type === 'video' && msg.mediaUrl && (
+                                    <div className="relative w-48 h-32 md:w-64 md:h-48 rounded-lg overflow-hidden border border-gray-300 mb-1 bg-black flex items-center justify-center">
+                                        <video
+                                            src={msg.mediaUrl}
+                                            controls
+                                            className="w-full h-full object-contain"
+                                            aria-label="Shared video"
+                                            preload="metadata"
+                                        >
+                                            Your browser does not support the video tag.
+                                        </video>
+                                    </div>
+                                )}
+                                <span className={`text-xs mt-1 ${msg.senderId === user?.uid ? 'text-purple-200' : 'text-gray-500'} text-right`}>
+                                    {msg.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                            </div>
+                            {msg.senderId === user?.uid && (
+                                <Image
+                                    src={user?.photoURL || '/default-avatar.png'}
+                                    alt={user?.displayName || 'You'}
+                                    width={32}
+                                    height={32}
+                                    className="rounded-full object-cover border-2 border-purple-400"
+                                />
+                            )}
+                        </div>
+                    ))
+                )}
+                <div ref={messagesEndRef} />
+            </div>
+
+            {/* Chat Input Area */}
+            {user ? (
+                <form onSubmit={handleSendMessage} className="flex flex-col gap-2 p-2 bg-gray-100 rounded-lg border border-gray-200">
+                    {/* Display selected file names */}
+                    {(selectedChatImage || selectedChatVideo) && (
+                        <div className="flex items-center gap-2 text-sm text-gray-700">
+                            {selectedChatImage && (
+                                <span className="flex items-center gap-1 bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                                    <ImageIcon className="w-4 h-4" /> {selectedChatImage.name}
+                                    <button type="button" onClick={() => setSelectedChatImage(null)} className="ml-1 text-blue-600 hover:text-blue-900 font-bold">x</button>
+                                </span>
+                            )}
+                            {selectedChatVideo && (
+                                <span className="flex items-center gap-1 bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                                    <VideoIcon className="w-4 h-4" /> {selectedChatVideo.name}
+                                    <button type="button" onClick={() => setSelectedChatVideo(null)} className="ml-1 text-green-600 hover:text-green-900 font-bold">x</button>
+                                </span>
+                            )}
+                        </div>
+                    )}
+
+                    <div className="flex gap-2 items-center">
+                        <Input
+                            type="text"
+                            value={chatMessage}
+                            onChange={(e) => {
+                                setChatMessage(e.target.value);
+                                // Clear media selection if typing a new message
+                                setSelectedChatImage(null);
+                                setSelectedChatVideo(null);
+                                // Reset the value of the actual file inputs to clear them visually
+                                const chatImageUploadInput = document.getElementById('chatImageUpload') as HTMLInputElement;
+                                if (chatImageUploadInput) chatImageUploadInput.value = '';
+                                const chatVideoUploadInput = document.getElementById('chatVideoUpload') as HTMLInputElement;
+                                if (chatVideoUploadInput) chatVideoUploadInput.value = '';
+                            }}
+                            placeholder="Type your message..."
+                            className="flex-grow border-gray-300 focus:border-purple-500 focus:ring-purple-500 rounded-full py-2 px-4"
+                            disabled={isSendingChatMedia || !!selectedChatImage || !!selectedChatVideo} // Disable if media is selected or sending
+                        />
+                        {/* Image Upload Button */}
+                        <label htmlFor="chatImageUpload" className="cursor-pointer bg-purple-100 text-purple-700 hover:bg-purple-200 p-2 rounded-full shadow-sm transition-colors flex items-center justify-center w-10 h-10 flex-shrink-0">
+                            <ImageIcon className="w-5 h-5" />
+                            <input
+                                id="chatImageUpload"
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={handleChatImageChange}
+                                disabled={isSendingChatMedia || !!selectedChatVideo || chatMessage.trim() !== ''} // Disable if video selected, sending, or text is being typed
+                            />
+                        </label>
+                        {/* Video Upload Button */}
+                        <label htmlFor="chatVideoUpload" className="cursor-pointer bg-purple-100 text-purple-700 hover:bg-purple-200 p-2 rounded-full shadow-sm transition-colors flex items-center justify-center w-10 h-10 flex-shrink-0">
+                            <VideoIcon className="w-5 h-5" />
+                            <input
+                                id="chatVideoUpload"
+                                type="file"
+                                accept="video/*"
+                                className="hidden"
+                                onChange={handleChatVideoChange}
+                                disabled={isSendingChatMedia || !!selectedChatImage || chatMessage.trim() !== ''} // Disable if image selected, sending, or text is being typed
+                            />
+                        </label>
+                        <Button
+                            type="submit"
+                            className="bg-purple-600 hover:bg-purple-700 text-white rounded-full p-3 shadow-md transition-colors flex-shrink-0"
+                            disabled={isSendingChatMedia || (chatMessage.trim() === '' && !selectedChatImage && !selectedChatVideo)}
+                        >
+                            {isSendingChatMedia ? (
+                                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3.5-3.5L12 0v4a8 8 0 100 16v-4l-3.5 3.5L12 24v-4a8 8 0 01-8-8z"></path>
+                                </svg>
+                            ) : (
+                                <SendIcon className="w-5 h-5" />
+                            )}
+                        </Button>
+                    </div>
+                </form>
+            ) : (
+                <p className="text-center text-gray-500 italic py-4">
+                    Sign in to join the conversation and send messages!
+                </p>
+            )}
+        </section>
+
       </main>
     </div>
   );
