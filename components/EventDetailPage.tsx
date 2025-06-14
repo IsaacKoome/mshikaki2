@@ -1,4 +1,4 @@
-// component/EventDetailPage.tsx
+// EventDetailPage.tsx
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
@@ -19,7 +19,7 @@ import {
   deleteDoc,
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { v4 as uuidv4 } from "uuid";
+import { v4 as uuidv4 } from "uuid"; // Correct import: v4 as uuidv4
 import { db, storage } from "@/lib/firebase";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -173,13 +173,11 @@ export default function EventDetailPage({ id, collectionName }: Props) {
       }
     };
     fetchEventData();
-  }, [id, collectionName]); // Dependencies: only the route params
+  }, [id, collectionName]);
 
   // Effect 2: Fetch Contributions and Chat Messages (runs when event data is available)
-  // This effect depends on 'event' being non-null.
   useEffect(() => {
-    // Guard: Do not proceed if event data is not yet loaded
-    if (!event) return;
+    if (!event) return; // Guard: Do not proceed if event data is not yet loaded
 
     const fetchContributions = () => {
       const q = query(collection(db, "contributions"), where("eventId", "==", id));
@@ -225,7 +223,6 @@ export default function EventDetailPage({ id, collectionName }: Props) {
             messages.forEach(msg => uniqueSenderIds.add(msg.senderId));
 
             const newParticipants: Participant[] = [];
-            // Now 'event.ownerId' is safely accessed here because `event` is guaranteed non-null by the outer guard
             if (event.ownerId) {
               newParticipants.push({
                 uid: event.ownerId,
@@ -294,7 +291,7 @@ export default function EventDetailPage({ id, collectionName }: Props) {
         unsubContributions();
         unsubChatAndParticipants();
     };
-  }, [id, collectionName, user?.uid, event]); // This effect now correctly depends on 'event'
+  }, [id, collectionName, user?.uid, event]);
 
 
   useEffect(() => {
@@ -314,7 +311,6 @@ export default function EventDetailPage({ id, collectionName }: Props) {
       alert("Please fill in all fields correctly.");
       return;
     }
-    // event is guaranteed non-null here due to the main render guard
     if (!event.beneficiaryPhone) {
         alert("This event does not have a beneficiary Mpesa number set up for receiving gifts.");
         return;
@@ -335,9 +331,9 @@ export default function EventDetailPage({ id, collectionName }: Props) {
                 phone: phone,
                 eventId: id,
                 collectionName: collectionName,
-                eventOwnerId: event.ownerId, // Now safe
+                eventOwnerId: event.ownerId,
                 contributorName: name,
-                beneficiaryPhone: event.beneficiaryPhone, // Now safe
+                beneficiaryPhone: event.beneficiaryPhone,
             }),
         });
 
@@ -371,7 +367,8 @@ export default function EventDetailPage({ id, collectionName }: Props) {
   const uploadFiles = async (files: FileList | File[], folder: string): Promise<string[]> => {
     const urls: string[] = [];
     for (const file of Array.from(files)) {
-      const fileRef = ref(storage, `${folder}/${uuid4()}-${file.name}`);
+      // FIX: Changed uuid4() to uuidv4()
+      const fileRef = ref(storage, `${folder}/${uuidv4()}-${file.name}`);
       const snapshot = await uploadBytes(fileRef, file);
       const url = await getDownloadURL(snapshot.ref);
       urls.push(url);
@@ -380,8 +377,7 @@ export default function EventDetailPage({ id, collectionName }: Props) {
   };
 
   const handleUploadMoreMedia = async () => {
-    // event is guaranteed non-null here due to the main render guard
-    if (!user || user.uid !== event.ownerId) { // Now safe
+    if (!user || user.uid !== event.ownerId) {
       alert("You are not authorized to upload media for this event.");
       return;
     }
@@ -433,6 +429,7 @@ export default function EventDetailPage({ id, collectionName }: Props) {
     try {
         if (selectedChatImage) {
             messageType = 'image';
+            // FIX: Changed uuid4() to uuidv4() inside uploadFiles if it was implicitly called there
             const uploadedUrls = await uploadFiles([selectedChatImage], 'chat_images');
             if (uploadedUrls.length > 0) {
                 uploadedMediaUrl = uploadedUrls[0];
@@ -445,6 +442,7 @@ export default function EventDetailPage({ id, collectionName }: Props) {
             }
         } else if (selectedChatVideo) {
             messageType = 'video';
+            // FIX: Changed uuid4() to uuidv4() inside uploadFiles if it was implicitly called there
             const uploadedUrls = await uploadFiles([selectedChatVideo], 'chat_videos');
             if (uploadedUrls.length > 0) {
                 uploadedMediaUrl = uploadedUrls[0];
@@ -568,8 +566,7 @@ export default function EventDetailPage({ id, collectionName }: Props) {
   };
 
   const getShareText = useCallback(() => {
-    // Ensure event is not null before accessing its properties
-    if (!event) return ''; // Fallback for safety, though render guard prevents this
+    if (!event) return '';
     const eventUrl = `${window.location.origin}/events/${collectionName}/${id}`;
     return `Join the '${event.title}' event on Mshikaki Events! Learn more and contribute here: ${eventUrl}`;
   }, [event, collectionName, id]);
@@ -595,7 +592,7 @@ export default function EventDetailPage({ id, collectionName }: Props) {
   }, [event, collectionName, id]);
 
   const handleNativeShare = useCallback(async () => {
-    if (!event) return; // Ensure event is not null
+    if (!event) return;
     if (navigator.share) {
       try {
         await navigator.share({
@@ -614,7 +611,6 @@ export default function EventDetailPage({ id, collectionName }: Props) {
 
 
   if (loading) return <p className="p-6 text-center text-gray-500">Loading event details...</p>;
-  // This guard ensures 'event' is not null for the rest of the render.
   if (!event) return <p className="p-6 text-center text-red-500">Event not found. It might have been deleted or the URL is incorrect.</p>;
 
   const goal = event.goal || 100000;
@@ -677,7 +673,7 @@ export default function EventDetailPage({ id, collectionName }: Props) {
                         aria-label={`Featured event video for ${event.title}`}
                         preload="metadata"
                     >
-                        Your browser does not support the video tag.
+                        Your browser doesoporto the video tag.
                     </video>
                 )}
                 {featuredMediaType === 'video' && (
@@ -936,7 +932,7 @@ export default function EventDetailPage({ id, collectionName }: Props) {
               {(event.images || [])
                 .filter(url => !(featuredMediaType === 'image' && url === featuredMediaUrl))
                 .map((url, index) => (
-                <div key={`img-gallery-${index}`} className="relative w-full aspect-video rounded-xl overflow-hidden shadow-md border border-gray-200">
+                <div key={`img-gallery-${index}`} className="relative w-full aspect-video rounded-xl overflow-hidden border border-gray-200">
                   <Image
                     src={url}
                     alt={`Event Image ${index + 1}`}
@@ -950,12 +946,12 @@ export default function EventDetailPage({ id, collectionName }: Props) {
               {(event.videos || [])
                 .filter(url => !(featuredMediaType === 'video' && url === featuredMediaUrl))
                 .map((url, index) => (
-                <div key={`video-gallery-${index}`} className="relative w-full aspect-video rounded-xl overflow-hidden shadow-md border border-gray-200 bg-black flex items-center justify-center">
+                <div key={`video-gallery-${index}`} className="relative w-full aspect-video rounded-xl overflow-hidden border border-gray-200 bg-black flex items-center justify-center">
                   <video
                     src={url}
                     controls
                     className="w-full h-full object-contain"
-                    aria-label={`Event Video ${index + 1}`}
+                    aria-label="Event Video"
                     preload="metadata"
                   >
                     Your browser does not support the video tag.
