@@ -1,7 +1,7 @@
-// EventDetailPage.tsx
+// component/EventDetailPage.tsx
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import {
   doc,
   getDoc,
@@ -15,6 +15,8 @@ import {
   addDoc,
   orderBy,
   limit,
+  arrayRemove,
+  deleteDoc,
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { v4 as uuidv4 } from "uuid";
@@ -41,7 +43,11 @@ import {
   UploadCloudIcon,
   MessageCircleIcon,
   SendIcon,
-  PlusIcon,
+  HeartIcon,
+  Trash2Icon,
+  Share2Icon,
+  UsersIcon,
+  Loader2,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import {
@@ -60,6 +66,7 @@ interface CommunityMessage {
   content?: string;
   mediaUrl?: string;
   fileName?: string;
+  likes?: string[];
 }
 
 interface EventData {
@@ -85,6 +92,13 @@ interface Contribution {
   timestamp: Timestamp;
   mpesaReceiptNumber?: string;
   status?: string;
+}
+
+interface Participant {
+  uid: string;
+  displayName: string;
+  photoURL?: string;
+  isOwner: boolean;
 }
 
 interface Props {
@@ -121,6 +135,11 @@ export default function EventDetailPage({ id, collectionName }: Props) {
   const [selectedChatImage, setSelectedChatImage] = useState<File | null>(null);
   const [selectedChatVideo, setSelectedChatVideo] = useState<File | null>(null);
   const [isSendingChatMedia, setIsSendingChatMedia] = useState(false);
+  const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
+
+  const [showShareOptions, setShowShareOptions] = useState(false);
+  const [communityParticipants, setCommunityParticipants] = useState<Participant[]>([]);
+  const [showParticipants, setShowParticipants] = useState(false);
 
 
   // Scroll to bottom of chat whenever messages change
@@ -135,8 +154,9 @@ export default function EventDetailPage({ id, collectionName }: Props) {
   }, [chatMessages, user?.uid]);
 
 
+  // Effect 1: Fetch Event Data (runs once or when id/collectionName changes)
   useEffect(() => {
-    const fetchEvent = async () => {
+    const fetchEventData = async () => {
       const ref = doc(db, collectionName, id);
       try {
         const snapshot = await getDoc(ref);
@@ -152,6 +172,14 @@ export default function EventDetailPage({ id, collectionName }: Props) {
         setLoading(false);
       }
     };
+    fetchEventData();
+  }, [id, collectionName]); // Dependencies: only the route params
+
+  // Effect 2: Fetch Contributions and Chat Messages (runs when event data is available)
+  // This effect depends on 'event' being non-null.
+  useEffect(() => {
+    // Guard: Do not proceed if event data is not yet loaded
+    if (!event) return;
 
     const fetchContributions = () => {
       const q = query(collection(db, "contributions"), where("eventId", "==", id));
@@ -182,16 +210,76 @@ export default function EventDetailPage({ id, collectionName }: Props) {
       return unsub;
     };
 
-    const fetchChatMessages = () => {
+    const fetchChatMessagesAndParticipants = () => {
         const chatRef = collection(db, collectionName, id, "community_messages");
         const q = query(chatRef, orderBy("timestamp", "asc"));
 
-        const unsub = onSnapshot(q, (snapshot) => {
+        const unsub = onSnapshot(q, async (snapshot) => {
             const messages = snapshot.docs.map(docSnapshot => ({
                 id: docSnapshot.id,
                 ...docSnapshot.data()
             })) as CommunityMessage[];
             setChatMessages(messages);
+
+            const uniqueSenderIds = new Set<string>();
+            messages.forEach(msg => uniqueSenderIds.add(msg.senderId));
+
+            const newParticipants: Participant[] = [];
+            // Now 'event.ownerId' is safely accessed here because `event` is guaranteed non-null by the outer guard
+            if (event.ownerId) {
+              newParticipants.push({
+                uid: event.ownerId,
+                displayName: event.ownerId === user?.uid ? user.displayName || "You" : "Event Owner",
+                photoURL: event.ownerId === user?.uid ? user.photoURL || '/default-avatar.png' : '/default-avatar.png',
+                isOwner: true,
+              });
+              uniqueSenderIds.delete(event.ownerId);
+            }
+
+            for (const senderId of Array.from(uniqueSenderIds)) {
+                if (senderId === user?.uid && user?.displayName) {
+                    newParticipants.push({
+                        uid: user.uid,
+                        displayName: user.displayName,
+                        photoURL: user.photoURL || '/default-avatar.png',
+                        isOwner: false,
+                    });
+                } else {
+                    try {
+                        const userDoc = await getDoc(doc(db, 'users', senderId));
+                        if (userDoc.exists()) {
+                            const userData = userDoc.data();
+                            newParticipants.push({
+                                uid: senderId,
+                                displayName: userData.displayName || 'Anonymous User',
+                                photoURL: userData.photoURL || '/default-avatar.png',
+                                isOwner: false,
+                            });
+                        } else {
+                            newParticipants.push({
+                                uid: senderId,
+                                displayName: 'Unknown User',
+                                photoURL: '/default-avatar.png',
+                                isOwner: false,
+                            });
+                        }
+                    } catch (e) {
+                        console.error("Error fetching participant user data:", e);
+                        newParticipants.push({
+                            uid: senderId,
+                            displayName: 'Unknown User',
+                            photoURL: '/default-avatar.png',
+                            isOwner: false,
+                        });
+                    }
+                }
+            }
+            newParticipants.sort((a, b) => {
+              if (a.isOwner && !b.isOwner) return -1;
+              if (!a.isOwner && b.isOwner) return 1;
+              return a.displayName.localeCompare(b.displayName);
+            });
+            setCommunityParticipants(newParticipants);
         }, (error) => {
             console.error("Error fetching chat messages:", error);
         });
@@ -199,15 +287,14 @@ export default function EventDetailPage({ id, collectionName }: Props) {
     };
 
 
-    fetchEvent();
     const unsubContributions = fetchContributions();
-    const unsubChat = fetchChatMessages();
+    const unsubChatAndParticipants = fetchChatMessagesAndParticipants();
 
     return () => {
         unsubContributions();
-        unsubChat();
+        unsubChatAndParticipants();
     };
-  }, [id, collectionName, user?.uid]);
+  }, [id, collectionName, user?.uid, event]); // This effect now correctly depends on 'event'
 
 
   useEffect(() => {
@@ -227,7 +314,8 @@ export default function EventDetailPage({ id, collectionName }: Props) {
       alert("Please fill in all fields correctly.");
       return;
     }
-    if (!event?.beneficiaryPhone) {
+    // event is guaranteed non-null here due to the main render guard
+    if (!event.beneficiaryPhone) {
         alert("This event does not have a beneficiary Mpesa number set up for receiving gifts.");
         return;
     }
@@ -244,12 +332,12 @@ export default function EventDetailPage({ id, collectionName }: Props) {
             },
             body: JSON.stringify({
                 amount: Number(amount),
-                phone: phone, // Contributor's phone number
-                eventId: id, // ID of the event
-                collectionName: collectionName, // Pass collectionName for callback route
-                eventOwnerId: event?.ownerId, // Event creator's UID
-                contributorName: name, // Contributor's name
-                beneficiaryPhone: event.beneficiaryPhone, // Beneficiary's Mpesa number (from event data)
+                phone: phone,
+                eventId: id,
+                collectionName: collectionName,
+                eventOwnerId: event.ownerId, // Now safe
+                contributorName: name,
+                beneficiaryPhone: event.beneficiaryPhone, // Now safe
             }),
         });
 
@@ -283,7 +371,7 @@ export default function EventDetailPage({ id, collectionName }: Props) {
   const uploadFiles = async (files: FileList | File[], folder: string): Promise<string[]> => {
     const urls: string[] = [];
     for (const file of Array.from(files)) {
-      const fileRef = ref(storage, `${folder}/${uuidv4()}-${file.name}`);
+      const fileRef = ref(storage, `${folder}/${uuid4()}-${file.name}`);
       const snapshot = await uploadBytes(fileRef, file);
       const url = await getDownloadURL(snapshot.ref);
       urls.push(url);
@@ -292,7 +380,8 @@ export default function EventDetailPage({ id, collectionName }: Props) {
   };
 
   const handleUploadMoreMedia = async () => {
-    if (!user || user.uid !== event?.ownerId) {
+    // event is guaranteed non-null here due to the main render guard
+    if (!user || user.uid !== event.ownerId) { // Now safe
       alert("You are not authorized to upload media for this event.");
       return;
     }
@@ -327,7 +416,6 @@ export default function EventDetailPage({ id, collectionName }: Props) {
     }
   };
 
-  // FIX: Refined handleSendMessage to handle undefined values correctly
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) {
@@ -336,7 +424,7 @@ export default function EventDetailPage({ id, collectionName }: Props) {
     }
 
     let messageType: CommunityMessage['type'] = 'text';
-    let uploadedMediaUrl: string | null = null; // Use null initially, or keep undefined and handle it
+    let uploadedMediaUrl: string | null = null;
     let uploadedFileName: string | null = null;
     let messageContent: string | null = null;
 
@@ -352,7 +440,7 @@ export default function EventDetailPage({ id, collectionName }: Props) {
             } else {
                 throw new Error("Image upload failed or returned no URL.");
             }
-            if (chatMessage.trim() !== '') { // Optional caption for image
+            if (chatMessage.trim() !== '') {
                 messageContent = chatMessage.trim();
             }
         } else if (selectedChatVideo) {
@@ -364,48 +452,45 @@ export default function EventDetailPage({ id, collectionName }: Props) {
             } else {
                 throw new Error("Video upload failed or returned no URL.");
             }
-            if (chatMessage.trim() !== '') { // Optional caption for video
+            if (chatMessage.trim() !== '') {
                 messageContent = chatMessage.trim();
             }
         } else if (chatMessage.trim() !== '') {
-            // Pure text message with content
             messageType = 'text';
             messageContent = chatMessage.trim();
         } else {
             alert("Please enter a message or select an image/video to send.");
-            return; // Exit if nothing valid to send
+            return;
         }
 
         const chatRef = collection(db, collectionName, id, "community_messages");
 
-        // Construct the payload dynamically, only including fields if they have a non-null/non-undefined value
         const messagePayload: { [key: string]: any } = {
             senderId: user.uid,
             senderDisplayName: user.displayName || "Anonymous",
             timestamp: Timestamp.now(),
             type: messageType,
+            likes: [],
         };
 
         if (user.photoURL) {
             messagePayload.senderPhotoURL = user.photoURL;
         }
-        if (messageContent !== null) { // Only add content if it's not null
+        if (messageContent !== null) {
             messagePayload.content = messageContent;
         }
-        if (uploadedMediaUrl !== null) { // Only add mediaUrl if it's not null
+        if (uploadedMediaUrl !== null) {
             messagePayload.mediaUrl = uploadedMediaUrl;
         }
-        if (uploadedFileName !== null) { // Only add fileName if it's not null
+        if (uploadedFileName !== null) {
             messagePayload.fileName = uploadedFileName;
         }
 
         await addDoc(chatRef, messagePayload);
 
-        // Clear inputs after sending
         setChatMessage('');
         setSelectedChatImage(null);
         setSelectedChatVideo(null);
-        // Clear native file input elements
         const chatImageUploadInput = document.getElementById('chatImageUpload') as HTMLInputElement;
         if (chatImageUploadInput) chatImageUploadInput.value = '';
         const chatVideoUploadInput = document.getElementById('chatVideoUpload') as HTMLInputElement;
@@ -422,8 +507,8 @@ export default function EventDetailPage({ id, collectionName }: Props) {
   const handleChatImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setSelectedChatImage(e.target.files[0]);
-      setSelectedChatVideo(null); // Clear video if image is selected
-      setChatMessage(''); // Clear text message if image is selected
+      setSelectedChatVideo(null);
+      setChatMessage('');
       (document.getElementById('chatVideoUpload') as HTMLInputElement).value = '';
     } else {
       setSelectedChatImage(null);
@@ -433,21 +518,109 @@ export default function EventDetailPage({ id, collectionName }: Props) {
   const handleChatVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setSelectedChatVideo(e.target.files[0]);
-      setSelectedChatImage(null); // Clear image if video is selected
-      setChatMessage(''); // Clear text message if video is selected
+      setSelectedChatImage(null);
+      setChatMessage('');
       (document.getElementById('chatImageUpload') as HTMLInputElement).value = '';
     } else {
       setSelectedChatVideo(null);
     }
   };
 
+  const handleToggleLike = async (message: CommunityMessage) => {
+    if (!user) {
+      alert("Please sign in to like messages.");
+      return;
+    }
+
+    const messageRef = doc(db, collectionName, id, "community_messages", message.id);
+    const hasLiked = message.likes?.includes(user.uid);
+
+    try {
+      await updateDoc(messageRef, {
+        likes: hasLiked ? arrayRemove(user.uid) : arrayUnion(user.uid)
+      });
+    } catch (error) {
+      console.error("Error toggling like:", error);
+      alert("Failed to update like status.");
+    }
+  };
+
+  const handleDeleteMessage = async (messageId: string) => {
+    if (!user) {
+      alert("Please sign in to delete messages.");
+      return;
+    }
+    if (!window.confirm("Are you sure you want to delete this message? This action cannot be undone.")) {
+        return;
+    }
+
+    setDeletingMessageId(messageId);
+
+    try {
+      const messageRef = doc(db, collectionName, id, "community_messages", messageId);
+      await deleteDoc(messageRef);
+    } catch (error) {
+      console.error("Error deleting message:", error);
+      alert(`Failed to delete message. Check your permissions. Error: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+        setDeletingMessageId(null);
+    }
+  };
+
+  const getShareText = useCallback(() => {
+    // Ensure event is not null before accessing its properties
+    if (!event) return ''; // Fallback for safety, though render guard prevents this
+    const eventUrl = `${window.location.origin}/events/${collectionName}/${id}`;
+    return `Join the '${event.title}' event on Mshikaki Events! Learn more and contribute here: ${eventUrl}`;
+  }, [event, collectionName, id]);
+
+  const getTwitterShareUrl = useCallback(() => {
+    if (!event) return '';
+    const text = encodeURIComponent(`Join the '${event.title}' event on Mshikaki Events!`);
+    const url = encodeURIComponent(`${window.location.origin}/events/${collectionName}/${id}`);
+    const hashtags = encodeURIComponent('MshikakiEvents,EventCommunity,Fundraising');
+    return `https://twitter.com/intent/tweet?text=${text}&url=${url}&hashtags=${hashtags}`;
+  }, [event, collectionName, id]);
+
+  const getFacebookShareUrl = useCallback(() => {
+    if (!event) return '';
+    const url = encodeURIComponent(`${window.location.origin}/events/${collectionName}/${id}`);
+    return `https://www.facebook.com/sharer/sharer.php?u=${url}`;
+  }, [collectionName, id, event]);
+
+  const getWhatsAppShareUrl = useCallback(() => {
+    if (!event) return '';
+    const text = encodeURIComponent(`Join the '${event.title}' event on Mshikaki Events! Click the link: ${window.location.origin}/events/${collectionName}/${id}`);
+    return `https://api.whatsapp.com/send?text=${text}`;
+  }, [event, collectionName, id]);
+
+  const handleNativeShare = useCallback(async () => {
+    if (!event) return; // Ensure event is not null
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: event.title,
+          text: `Join the '${event.title}' event community on Mshikaki Events!`,
+          url: `${window.location.origin}/events/${collectionName}/${id}`,
+        });
+        console.log('Event shared successfully!');
+      } catch (error) {
+        console.error('Error sharing event:', error);
+      }
+    } else {
+      alert("Your browser does not support the native share dialog. Please use the social media buttons below.");
+    }
+  }, [event, collectionName, id]);
+
 
   if (loading) return <p className="p-6 text-center text-gray-500">Loading event details...</p>;
+  // This guard ensures 'event' is not null for the rest of the render.
   if (!event) return <p className="p-6 text-center text-red-500">Event not found. It might have been deleted or the URL is incorrect.</p>;
 
   const goal = event.goal || 100000;
   const progress = Math.min((contributionsTotal / goal) * 100, 100);
   const isOwner = user?.uid === event.ownerId;
+
 
   const featuredMediaUrl = event.images && event.images.length > 0 ? event.images[0] :
                            (event.videos && event.videos.length > 0 ? event.videos[0] : null);
@@ -500,7 +673,7 @@ export default function EventDetailPage({ id, collectionName }: Props) {
                     <video
                         src={featuredMediaUrl}
                         controls
-                        className="w-full h-full object-contain bg-gray-900"
+                        className="w-full h-full object-contain"
                         aria-label={`Featured event video for ${event.title}`}
                         preload="metadata"
                     >
@@ -523,6 +696,50 @@ export default function EventDetailPage({ id, collectionName }: Props) {
             <p className="whitespace-pre-line leading-relaxed">{event.story}</p>
           </section>
         )}
+
+        {/* Share Event Section */}
+        <section className="bg-purple-50 shadow-inner p-6 rounded-2xl border border-purple-200 space-y-4">
+            <Collapsible open={showShareOptions} onOpenChange={setShowShareOptions}>
+                <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2 text-purple-800 font-bold text-lg">
+                        <Share2Icon className="w-6 h-6 text-purple-700" />
+                        Share This Event
+                    </div>
+                    <CollapsibleTrigger asChild>
+                        <Button variant="ghost" size="icon" className="text-purple-700 hover:text-purple-900">
+                            <ChevronDownIcon className={`w-5 h-5 transform transition-transform ${showShareOptions ? "rotate-180" : ""}`} />
+                        </Button>
+                    </CollapsibleTrigger>
+                </div>
+                <CollapsibleContent className="mt-4 space-y-4">
+                    <p className="text-gray-700 text-sm">Help spread the word about this event!</p>
+                    <div className="flex flex-wrap gap-3 justify-center">
+                        {/* Native Share (if supported by browser) */}
+                        {navigator.share && (
+                            <Button onClick={handleNativeShare} className="bg-blue-500 hover:bg-blue-600 text-white rounded-full px-4 py-2 text-sm flex items-center gap-2">
+                                <Share2Icon className="w-4 h-4" /> Share
+                            </Button>
+                        )}
+                        {/* Twitter */}
+                        <a href={getTwitterShareUrl()} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 bg-blue-400 hover:bg-blue-500 text-white rounded-full px-4 py-2 text-sm">
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.13l-6.177-8.156-6.436 8.156H2.809l7.47-8.542L2.25 2.25h3.308l5.593 6.425L18.244 2.25zM17.292 20l-1.157-1.47L4.72 4h2.417l10.322 13.99L17.292 20z"></path></svg>
+                            Twitter
+                        </a>
+                        {/* Facebook */}
+                        <a href={getFacebookShareUrl()} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 bg-blue-700 hover:bg-blue-800 text-white rounded-full px-4 py-2 text-sm">
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.505 1.492-3.89 3.776-3.89 1.094 0 2.24.195 2.24.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.891h-2.33v6.988C18.343 21.128 22 16.991 22 12z"></path></svg>
+                            Facebook
+                        </a>
+                        {/* WhatsApp */}
+                        <a href={getWhatsAppShareUrl()} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white rounded-full px-4 py-2 text-sm">
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.04 2C6.582 2 2 6.582 2 12.041c0 2.016.597 3.916 1.63 5.568L2 22l4.63-1.63a9.92 9.92 0 005.41 1.67h.001c5.459 0 9.92-4.558 9.92-10.001S17.5 2 12.04 2zM17 15.696c-.22 0-.38-.073-.59-.146-.4-.146-1.573-.623-1.812-.662-.23-.04-.4-.04-.56.073-.16.11-.6.662-.78.8-.19.146-.37.146-.6.073-.22-.073-.91-.323-1.74-.91-.64-.439-1.07-1.07-1.2-.8-.11.147.01.277.15.46.12.146.22.287.3.43.07.146.04.287-.07.4-.11.147-.73.69-.84.77-.11.11-.23.146-.4.146-.17 0-.35-.073-.5-.183-.15-.11-.4-.25-.83-.49-.44-.219-1.03-.8-1.56-1.46-.53-.662-.84-1.284-.66-1.628.18-.344.38-.623.5-.732.12-.11.23-.22.3-.293.07-.073.14-.146.19-.22.04-.11.02-.219-.01-.328-.04-.073-.3-.7-.4-.95-.12-.219-.24-.292-.4-.365-.16-.073-.34-.146-.51-.146-.17 0-.44.073-.66.219-.22.146-.84.8-.84 1.936 0 1.137.86 2.23 1.07 2.376.21.146 1.63 2.47 3.86 3.447 2.23.977 2.23.69 2.65.662.42-.04.91-.183 1.04-.292.12-.11.23-.25.35-.4.11-.146.23-.287.35-.44a.434.434 0 00.08-.13c.12-.146.12-.25.07-.4z"></path></svg>
+                            WhatsApp
+                        </a>
+                    </div>
+                </CollapsibleContent>
+            </Collapsible>
+        </section>
+
 
         {/* Contribution Note (Collapsible) */}
         {event.contributionNote && (
@@ -725,7 +942,7 @@ export default function EventDetailPage({ id, collectionName }: Props) {
                     alt={`Event Image ${index + 1}`}
                     fill
                     className="object-cover transition-transform duration-300 hover:scale-105"
-                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                    sizes="(max-width: 768px) 100vw, 50vw"
                   />
                 </div>
               ))}
@@ -748,6 +965,52 @@ export default function EventDetailPage({ id, collectionName }: Props) {
             </div>
           </section>
         )}
+
+        {/* Community Participants Section */}
+        <section className="bg-emerald-50 shadow-inner p-6 rounded-2xl border border-emerald-200 space-y-4">
+            <Collapsible open={showParticipants} onOpenChange={setShowParticipants}>
+                <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2 text-emerald-800 font-bold text-lg">
+                        <UsersIcon className="w-6 h-6 text-emerald-700" />
+                        Community Participants ({communityParticipants.length})
+                    </div>
+                    <CollapsibleTrigger asChild>
+                        <Button variant="ghost" size="icon" className="text-emerald-700 hover:text-emerald-900">
+                            <ChevronDownIcon className={`w-5 h-5 transform transition-transform ${showParticipants ? "rotate-180" : ""}`} />
+                        </Button>
+                    </CollapsibleTrigger>
+                </div>
+                <CollapsibleContent className="mt-4">
+                    {communityParticipants.length === 0 ? (
+                        <p className="text-gray-500 italic text-center py-4">No participants in this community yet.</p>
+                    ) : (
+                        <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {communityParticipants.map(participant => (
+                                <li key={participant.uid} className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm border border-gray-100">
+                                    <Image
+                                        src={participant.photoURL || '/default-avatar.png'}
+                                        alt={participant.displayName}
+                                        width={40}
+                                        height={40}
+                                        className="rounded-full object-cover border-2 border-emerald-400"
+                                    />
+                                    <div className="flex flex-col">
+                                        <span className="font-semibold text-gray-800">
+                                            {participant.displayName}
+                                        </span>
+                                        {participant.isOwner && (
+                                            <span className="text-xs bg-yellow-400 text-yellow-900 px-2 py-0.5 rounded-full font-semibold mt-1 self-start">
+                                                Event Owner
+                                            </span>
+                                        )}
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </CollapsibleContent>
+            </Collapsible>
+        </section>
 
 
         {/* Contribution List Section */}
@@ -807,7 +1070,7 @@ export default function EventDetailPage({ id, collectionName }: Props) {
                                     className="rounded-full object-cover border-2 border-gray-300"
                                 />
                             )}
-                            <div className={`flex flex-col max-w-[75%] p-3 rounded-xl shadow-sm ${
+                            <div className={`flex flex-col max-w-[75%] p-3 rounded-xl shadow-sm relative group ${
                                 msg.senderId === user?.uid
                                     ? 'bg-purple-600 text-white rounded-br-none'
                                     : 'bg-gray-200 text-gray-800 rounded-bl-none'
@@ -841,6 +1104,46 @@ export default function EventDetailPage({ id, collectionName }: Props) {
                                         >
                                             Your browser does not support the video tag.
                                         </video>
+                                    </div>
+                                )}
+                                {/* Likes & Delete Controls */}
+                                {user && (
+                                    <div className={`flex items-center gap-2 mt-2 ${msg.senderId === user?.uid ? 'justify-end' : 'justify-start'}`}>
+                                        {/* Like Button */}
+                                        <button
+                                            onClick={() => handleToggleLike(msg)}
+                                            className={`flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full transition-colors ${
+                                                msg.likes?.includes(user.uid)
+                                                    ? 'bg-red-500 text-white'
+                                                    : msg.senderId === user?.uid
+                                                        ? 'bg-purple-500/30 text-purple-100 hover:bg-purple-500/50'
+                                                        : 'bg-gray-300 text-gray-600 hover:bg-gray-400'
+                                            }`}
+                                            title={msg.likes?.includes(user.uid) ? 'Unlike' : 'Like'}
+                                        >
+                                            <HeartIcon className={`w-3 h-3 ${msg.likes?.includes(user.uid) ? 'fill-current' : ''}`} />
+                                            <span>{msg.likes?.length || 0}</span>
+                                        </button>
+
+                                        {/* Delete Button (Visible to sender or event owner) */}
+                                        {(msg.senderId === user?.uid || isOwner) && (
+                                            <button
+                                                onClick={() => handleDeleteMessage(msg.id)}
+                                                className={`ml-auto p-1 rounded-full transition-colors ${
+                                                    msg.senderId === user?.uid
+                                                        ? 'text-purple-100 hover:bg-purple-500/50'
+                                                        : 'text-red-500 hover:bg-red-100'
+                                                } ${deletingMessageId === msg.id ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                disabled={deletingMessageId === msg.id}
+                                                title="Delete Message"
+                                            >
+                                                {deletingMessageId === msg.id ? (
+                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                ) : (
+                                                    <Trash2Icon className="w-4 h-4" />
+                                                )}
+                                            </button>
+                                        )}
                                     </div>
                                 )}
                                 <span className={`text-xs mt-1 ${msg.senderId === user?.uid ? 'text-purple-200' : 'text-gray-500'} text-right`}>
@@ -889,10 +1192,8 @@ export default function EventDetailPage({ id, collectionName }: Props) {
                             value={chatMessage}
                             onChange={(e) => {
                                 setChatMessage(e.target.value);
-                                // Clear media selection if typing a new message
                                 setSelectedChatImage(null);
                                 setSelectedChatVideo(null);
-                                // Reset the value of the actual file inputs to clear them visually
                                 const chatImageUploadInput = document.getElementById('chatImageUpload') as HTMLInputElement;
                                 if (chatImageUploadInput) chatImageUploadInput.value = '';
                                 const chatVideoUploadInput = document.getElementById('chatVideoUpload') as HTMLInputElement;
@@ -900,7 +1201,7 @@ export default function EventDetailPage({ id, collectionName }: Props) {
                             }}
                             placeholder="Type your message..."
                             className="flex-grow border-gray-300 focus:border-purple-500 focus:ring-purple-500 rounded-full py-2 px-4"
-                            disabled={isSendingChatMedia || !!selectedChatImage || !!selectedChatVideo} // Disable if media is selected or sending
+                            disabled={isSendingChatMedia || !!selectedChatImage || !!selectedChatVideo}
                         />
                         {/* Image Upload Button */}
                         <label htmlFor="chatImageUpload" className="cursor-pointer bg-purple-100 text-purple-700 hover:bg-purple-200 p-2 rounded-full shadow-sm transition-colors flex items-center justify-center w-10 h-10 flex-shrink-0">
@@ -911,7 +1212,7 @@ export default function EventDetailPage({ id, collectionName }: Props) {
                                 accept="image/*"
                                 className="hidden"
                                 onChange={handleChatImageChange}
-                                disabled={isSendingChatMedia || !!selectedChatVideo || chatMessage.trim() !== ''} // Disable if video selected, sending, or text is being typed
+                                disabled={isSendingChatMedia || !!selectedChatVideo || chatMessage.trim() !== ''}
                             />
                         </label>
                         {/* Video Upload Button */}
@@ -923,7 +1224,7 @@ export default function EventDetailPage({ id, collectionName }: Props) {
                                 accept="video/*"
                                 className="hidden"
                                 onChange={handleChatVideoChange}
-                                disabled={isSendingChatMedia || !!selectedChatImage || chatMessage.trim() !== ''} // Disable if image selected, sending, or text is being typed
+                                disabled={isSendingChatMedia || !!selectedChatImage || chatMessage.trim() !== ''}
                             />
                         </label>
                         <Button
