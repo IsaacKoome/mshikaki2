@@ -27,8 +27,9 @@ import {
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { v4 as uuidv4 } from "uuid";
 import { db, storage } from "@/lib/firebase";
+import Link from 'next/link'; // Import Link
 
-// Interfaces for props received from EventDetailPage
+// Interfaces for props received from EventDetailPage (unchanged)
 interface EventData {
   title: string;
   location: string;
@@ -66,9 +67,9 @@ interface CurrentUser {
 interface EventCommunityChatSectionProps {
   eventId: string;
   collectionName: "weddings" | "birthdays" | "babyshowers";
-  eventData: EventData; // Full event data passed as prop
-  currentUser: CurrentUser | null; // Authenticated user data
-  chatMessages: CommunityMessage[]; // Data passed from parent
+  eventData: EventData;
+  currentUser: CurrentUser | null;
+  chatMessages: CommunityMessage[];
 }
 
 export default function EventCommunityChatSection({
@@ -88,7 +89,6 @@ export default function EventCommunityChatSection({
 
   const isOwner = currentUser?.uid === eventData.ownerId;
 
-  // Scroll to bottom of chat whenever messages change
   useEffect(() => {
     const chatContainer = messagesEndRef.current?.parentElement;
     if (chatContainer) {
@@ -99,7 +99,6 @@ export default function EventCommunityChatSection({
     }
   }, [chatMessages, currentUser?.uid]);
 
-  // Generic function to upload files to Firebase Storage (copied from media section as chat needs it)
   const uploadFiles = async (files: FileList | File[], folder: string): Promise<string[]> => {
     const urls: string[] = [];
     for (const file of Array.from(files)) {
@@ -245,7 +244,6 @@ export default function EventCommunityChatSection({
       alert("Please sign in to delete messages.");
       return;
     }
-    // Using window.confirm for now, consider a custom dialog for better UX
     if (!window.confirm("Are you sure you want to delete this message? This action cannot be undone.")) {
         return;
     }
@@ -265,7 +263,7 @@ export default function EventCommunityChatSection({
 
 
   return (
-    <> {/* Added React.Fragment as a top-level wrapper */}
+    <>
       <section className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
         <h2 className="text-2xl font-bold text-purple-700 mb-4 flex items-center gap-3">
             <MessageCircleIcon className="w-7 h-7 text-purple-600" /> Community Chat
@@ -283,23 +281,28 @@ export default function EventCommunityChatSection({
                         key={msg.id}
                         className={`flex items-start gap-3 mb-4 ${msg.senderId === currentUser?.uid ? 'justify-end' : 'justify-start'}`}
                     >
-                        {msg.senderId !== currentUser?.uid && (
-                            <Image
-                                src={msg.senderPhotoURL || '/default-avatar.png'}
-                                alt={msg.senderDisplayName}
-                                width={32}
-                                height={32}
-                                className="rounded-full object-cover border-2 border-gray-300"
-                            />
-                        )}
+                        {/* Make sender's avatar clickable */}
+                        <Link href={`/users/${msg.senderId}`} passHref>
+                          <Image
+                              src={msg.senderPhotoURL || '/default-avatar.png'}
+                              alt={msg.senderDisplayName}
+                              width={32}
+                              height={32}
+                              className={`rounded-full object-cover border-2 transition-transform hover:scale-110 ${msg.senderId === currentUser?.uid ? 'border-purple-400' : 'border-gray-300'}`}
+                          />
+                        </Link>
+
                         <div className={`flex flex-col max-w-[75%] p-3 rounded-xl shadow-sm relative group ${
                             msg.senderId === currentUser?.uid
                                 ? 'bg-purple-600 text-white rounded-br-none'
                                 : 'bg-gray-200 text-gray-800 rounded-bl-none'
                         }`}>
-                            <span className={`text-xs font-bold mb-1 ${msg.senderId === currentUser?.uid ? 'text-purple-100' : 'text-gray-600'}`}>
-                                {msg.senderDisplayName} {msg.senderId === eventData.ownerId && <span className="text-xs bg-yellow-400 text-yellow-900 px-1 rounded-full font-semibold">ADMIN</span>}
-                            </span>
+                            {/* Make sender's display name clickable */}
+                            <Link href={`/users/${msg.senderId}`} passHref>
+                              <span className={`text-xs font-bold mb-1 cursor-pointer hover:underline ${msg.senderId === currentUser?.uid ? 'text-purple-100' : 'text-gray-600'}`}>
+                                  {msg.senderDisplayName} {msg.senderId === eventData.ownerId && <span className="text-xs bg-yellow-400 text-yellow-900 px-1 rounded-full font-semibold">ADMIN</span>}
+                              </span>
+                            </Link>
                             {/* Render content based on message type */}
                             {msg.type === 'text' && msg.content && (
                                 <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
@@ -462,6 +465,6 @@ export default function EventCommunityChatSection({
             </p>
         )}
       </section>
-    </> // Closing React.Fragment
+    </>
   );
 }
