@@ -87,6 +87,55 @@ interface Props {
   collectionName: "weddings" | "birthdays" | "babyshowers";
 }
 
+// Interfaces (Update this EventData interface)
+interface CommunityMessage {
+  id: string;
+  senderId: string;
+  senderDisplayName: string;
+  senderPhotoURL?: string;
+  timestamp: Timestamp;
+  type: 'text' | 'image' | 'video' | 'file';
+  content?: string;
+  mediaUrl?: string;
+  fileName?: string;
+  likes?: string[];
+}
+
+interface EventData {
+  title: string;
+  location: string;
+  images: string[];
+  videos?: string[];
+  goal: number;
+  raised?: number;
+  story?: string;
+  date?: string;
+  contributionNote?: string;
+  beneficiaryPhone?: string;
+  ownerId?: string; // Made optional if you don't strictly require it on all read operations
+  // New fields for Phase 2:
+  eventCategory: 'wedding' | 'birthday' | 'babyshower' | 'party' | 'concert' | 'community' | 'church' | 'fundraiser' | 'other';
+  isPublic: boolean;
+  [key: string]: any; // Keep this for flexibility if other fields are present
+}
+
+interface Contribution {
+  id: string;
+  amount: number;
+  name: string;
+  phone: string;
+  timestamp: Timestamp;
+  mpesaReceiptNumber?: string;
+  status?: string;
+}
+
+interface Participant {
+  uid: string;
+  displayName: string;
+  photoURL?: string;
+  isOwner: boolean;
+}
+
 export default function EventDetailPage({ id, collectionName }: Props) {
   const { user } = useAuth(); // Global auth state for the current user
   const [event, setEvent] = useState<EventData | null>(null);
