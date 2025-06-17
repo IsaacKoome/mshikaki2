@@ -256,9 +256,11 @@ export default function UserProfilePage() {
           )}
           {/* Add a button for current user to edit profile */}
           {isCurrentUserProfile && (
-            <button className="mt-4 bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-6 rounded-full shadow-md transition-all duration-300 transform hover:scale-105">
-              Edit Profile
-            </button>
+            <Link href={`/profile/${profile.uid}/edit`} passHref>
+        <button className="mt-4 bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 px-6 rounded-full shadow-md transition-all duration-300 transform hover:scale-105">
+            Edit Profile
+        </button>
+    </Link>
           )}
         </section>
 
