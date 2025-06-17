@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label"; // Ensure Label is imported
+import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
@@ -156,10 +156,11 @@ export default function CreateEventPage() {
   };
 
   return (
+    // Restored the previous gradient background
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-100 p-4 sm:p-6 lg:p-8 flex items-center justify-center">
       <main className="w-full max-w-3xl mx-auto p-6 sm:p-8 md:p-10 bg-white shadow-2xl rounded-3xl border border-purple-100 space-y-7 sm:space-y-8 animate-fade-in">
-        <h1 className="text-3xl sm:text-4xl font-extrabold text-center text-purple-800 mb-6 flex items-center justify-center gap-3">
-          <MegaphoneIcon className="w-8 h-8 text-purple-600" /> Create New Event
+        <h1 className="text-3xl sm:text-4xl font-extrabold text-center text-indigo-800 mb-6 flex items-center justify-center gap-3">
+          <MegaphoneIcon className="w-8 h-8 text-indigo-600" /> Create New Event
         </h1>
 
         <form onSubmit={handleCreateEvent} className="space-y-6 sm:space-y-7">
@@ -168,26 +169,26 @@ export default function CreateEventPage() {
             <h2 className="text-xl sm:text-2xl font-semibold text-purple-700 border-b pb-2 mb-4 border-purple-200">
               Basic Event Details
             </h2>
-            <div> {/* Wrapper div for Label and Input */}
+            <div>
               <Label htmlFor="title" className="text-sm font-medium text-gray-700 mb-1 block">Event Title</Label>
               <Input
-                id="title" // Added id
+                id="title"
                 placeholder="e.g., John & Jane's Wedding Celebration"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 required
-                className="w-full rounded-lg px-4 py-2 border-gray-300 focus:border-purple-500 focus:ring-purple-500 transition-all"
+                className="w-full rounded-lg px-4 py-2 border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 transition-all"
               />
             </div>
-            <div> {/* Wrapper div for Label and Input */}
+            <div>
               <Label htmlFor="location" className="text-sm font-medium text-gray-700 mb-1 block">Event Location</Label>
               <Input
-                id="location" // Added id
+                id="location"
                 placeholder="e.g., Nairobi, Kenya"
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
                 required
-                className="w-full rounded-lg px-4 py-2 border-gray-300 focus:border-purple-500 focus:ring-purple-500 transition-all"
+                className="w-full rounded-lg px-4 py-2 border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 transition-all"
               />
             </div>
           </div>
@@ -197,14 +198,14 @@ export default function CreateEventPage() {
             <h2 className="text-xl sm:text-2xl font-semibold text-purple-700 border-b pb-2 mb-4 border-purple-200">
               Categorization & Timing
             </h2>
-            {/* Event Category Selection - Already has Label */}
             <div>
               <Label htmlFor="eventCategory" className="text-sm font-medium text-gray-700 mb-1 block">Event Category</Label>
               <Select value={eventCategory} onValueChange={(value: EventData['eventCategory']) => setEventCategory(value)}>
-                <SelectTrigger id="eventCategory" className="w-full rounded-lg px-4 py-2 border-gray-300 focus:border-purple-500 focus:ring-purple-500 transition-all">
+                <SelectTrigger id="eventCategory" className="w-full rounded-lg px-4 py-2 border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 transition-all">
                   <SelectValue placeholder="Select Event Category" />
                 </SelectTrigger>
-                <SelectContent>
+                {/* Ensure z-index and position="popper" are kept for the dropdown content */}
+                <SelectContent className="z-[99] bg-white rounded-lg shadow-lg border border-gray-200" position="popper">
                   <SelectItem value="wedding">Wedding <PartyPopperIcon className="inline-block ml-2 w-4 h-4 text-purple-500" /></SelectItem>
                   <SelectItem value="birthday">Birthday <BabyIcon className="inline-block ml-2 w-4 h-4 text-pink-500" /></SelectItem>
                   <SelectItem value="babyshower">Baby Shower <BabyIcon className="inline-block ml-2 w-4 h-4 text-blue-500" /></SelectItem>
@@ -218,14 +219,14 @@ export default function CreateEventPage() {
               </Select>
             </div>
 
-            {/* Internal Collection Name Selection - Already has Label */}
             <div>
               <Label htmlFor="collectionName" className="text-sm font-medium text-gray-700 mb-1 block">Internal Collection Type (for organizing)</Label>
               <Select value={collectionName} onValueChange={(value: "weddings" | "birthdays" | "babyshowers") => setCollectionName(value)}>
-                <SelectTrigger id="collectionName" className="w-full rounded-lg px-4 py-2 border-gray-300 focus:border-purple-500 focus:ring-purple-500 transition-all">
+                <SelectTrigger id="collectionName" className="w-full rounded-lg px-4 py-2 border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 transition-all">
                   <SelectValue placeholder="Select Internal Type" />
                 </SelectTrigger>
-                <SelectContent>
+                {/* Ensure z-index and position="popper" are kept for the dropdown content */}
+                <SelectContent className="z-[99] bg-white rounded-lg shadow-lg border border-gray-200" position="popper">
                   <SelectItem value="weddings">Wedding</SelectItem>
                   <SelectItem value="birthdays">Birthday</SelectItem>
                   <SelectItem value="babyshowers">Baby Shower</SelectItem>
@@ -234,21 +235,20 @@ export default function CreateEventPage() {
               <p className="text-xs text-gray-500 mt-1">This helps organize your events internally in the database.</p>
             </div>
 
-            {/* Event Date Picker - Already has Label */}
             <div>
               <Label htmlFor="eventDate" className="text-sm font-medium text-gray-700 mb-1 block">Event Date</Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
                     variant={"outline"}
-                    className={`w-full justify-start text-left font-normal h-10 px-4 py-2 rounded-lg border-gray-300 focus:border-purple-500 focus:ring-purple-500 transition-all ${!date && "text-muted-foreground"}`}
+                    className={`w-full justify-start text-left font-normal h-10 px-4 py-2 rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 transition-all ${!date && "text-muted-foreground"}`}
                     id="eventDate"
                   >
                     <CalendarIcon className="mr-2 h-4 w-4 text-purple-500" />
                     {date ? format(date, "PPP") : <span>Pick a date</span>}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 bg-white rounded-lg shadow-xl border border-gray-200">
+                <PopoverContent className="w-auto p-0 bg-white rounded-lg shadow-xl border border-gray-200 z-[99]">
                   <Calendar
                     mode="single"
                     selected={date}
@@ -266,55 +266,55 @@ export default function CreateEventPage() {
             <h2 className="text-xl sm:text-2xl font-semibold text-purple-700 border-b pb-2 mb-4 border-purple-200">
               Financial & Story
             </h2>
-            <div> {/* Wrapper div for Label and Input */}
+            <div>
               <Label htmlFor="goal" className="text-sm font-medium text-gray-700 mb-1 block">Contribution Goal (KES)</Label>
               <Input
-                id="goal" // Added id
+                id="goal"
                 type="number"
                 placeholder="e.g., 50000"
                 value={goal}
                 onChange={(e) => setGoal(e.target.value === "" ? "" : Number(e.target.value))}
                 required
                 min="1"
-                className="w-full rounded-lg px-4 py-2 border-gray-300 focus:border-purple-500 focus:ring-purple-500 transition-all"
+                className="w-full rounded-lg px-4 py-2 border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 transition-all"
               />
             </div>
 
-            <div> {/* Wrapper div for Label and Input */}
+            <div>
               <Label htmlFor="beneficiaryPhone" className="text-sm font-medium text-gray-700 mb-1 block">Beneficiary M-Pesa Phone Number</Label>
               <Input
-                id="beneficiaryPhone" // Added id
+                id="beneficiaryPhone"
                 type="tel"
                 placeholder="e.g., 0712345678 (for receiving contributions)"
                 value={beneficiaryPhone}
                 onChange={(e) => setBeneficiaryPhone(e.target.value)}
                 required
-                className="w-full rounded-lg px-4 py-2 border-gray-300 focus:border-purple-500 focus:ring-purple-500 transition-all"
+                className="w-full rounded-lg px-4 py-2 border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 transition-all"
               />
             </div>
             <p className="text-xs text-gray-500 -mt-2">Ensure this is the M-Pesa number registered to receive payments.</p>
 
-            <div> {/* Wrapper div for Label and Textarea */}
+            <div>
               <Label htmlFor="story" className="text-sm font-medium text-gray-700 mb-1 block">Event Story / Description</Label>
               <Textarea
-                id="story" // Added id
+                id="story"
                 placeholder="Tell us more about your event, its purpose, and what makes it special..."
                 value={story}
                 onChange={(e) => setStory(e.target.value)}
                 rows={5}
-                className="w-full rounded-lg px-4 py-2 border-gray-300 focus:border-purple-500 focus:ring-purple-500 transition-all"
+                className="w-full rounded-lg px-4 py-2 border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 transition-all"
               />
             </div>
 
-            <div> {/* Wrapper div for Label and Textarea */}
+            <div>
               <Label htmlFor="contributionNote" className="text-sm font-medium text-gray-700 mb-1 block">Note for Contributors (Optional)</Label>
               <Textarea
-                id="contributionNote" // Added id
+                id="contributionNote"
                 placeholder="e.g., Thank you for supporting our dream wedding! Your contribution means the world to us."
                 value={contributionNote}
                 onChange={(e) => setContributionNote(e.target.value)}
                 rows={3}
-                className="w-full rounded-lg px-4 py-2 border-gray-300 focus:border-purple-500 focus:ring-purple-500 transition-all"
+                className="w-full rounded-lg px-4 py-2 border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 transition-all"
               />
             </div>
           </div>
@@ -324,7 +324,6 @@ export default function CreateEventPage() {
             <h2 className="text-xl sm:text-2xl font-semibold text-purple-700 border-b pb-2 mb-4 border-purple-200">
               Event Media
             </h2>
-            {/* Images Upload */}
             <div>
               <label htmlFor="images" className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
                 <ImagePlusIcon className="w-5 h-5 text-purple-500" /> Upload Event Images (Min. 1, Max. 5)
@@ -347,7 +346,6 @@ export default function CreateEventPage() {
               )}
           </div>
 
-            {/* Videos Upload */}
             <div>
               <label htmlFor="videos" className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
                 <VideoIcon className="w-5 h-5 text-purple-500" /> Upload Event Videos (Optional)

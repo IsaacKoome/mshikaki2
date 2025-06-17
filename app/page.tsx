@@ -1,14 +1,15 @@
 // app/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react"; // Added useMemo
 import Link from "next/link";
 import Image from "next/image";
 import { collection, query, where, orderBy, onSnapshot, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { CalendarIcon, MapPinIcon, Loader2, SparklesIcon, ChevronDownIcon } from "lucide-react";
+import { CalendarIcon, MapPinIcon, Loader2, SparklesIcon, ChevronDownIcon, SearchIcon } from "lucide-react"; // Added SearchIcon
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input"; // Assuming Input component is available globally
 
 // Interfaces
 interface EventData {
@@ -19,30 +20,33 @@ interface EventData {
   date?: string;
   collectionName: string;
   isPublic: boolean;
-  // Updated EventCategory to reflect plural names as seen in Firestore
   eventCategory: 'weddings' | 'birthdays' | 'babyshowers' | 'party' | 'concert' | 'community' | 'church' | 'fundraiser' | 'other';
   ownerId: string;
   createdAt: Timestamp;
+  story?: string; // Ensure story is part of the interface for search
 }
 
 export default function HomePage() {
-  const [events, setEvents] = useState<EventData[]>([]);
+  const [rawCategoryFilteredEvents, setRawCategoryFilteredEvents] = useState<EventData[]>([]); // Stores events filtered by category, before text search
+  const [displayedEvents, setDisplayedEvents] = useState<EventData[]>([]); // Final events displayed after text search
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // Default to 'all' or a specific category you want to show first
-  const [selectedCategory, setSelectedCategory] = useState<EventData['eventCategory'] | "all">("all"); 
+  const [selectedCategory, setSelectedCategory] = useState<EventData['eventCategory'] | "all">("all");
+  const [searchTerm, setSearchTerm] = useState(""); // New state for search term
 
   useEffect(() => {
     const unsubscribes: (() => void)[] = [];
-    const allPublicEvents: EventData[] = [];
-    const eventCollections = ["weddings", "birthdays", "babyshowers"]; // These are plural collection names
+    const eventCollections = ["weddings", "birthdays", "babyshowers"]; // Your existing collections
 
     const fetchPublicEvents = () => {
-      setEvents([]); 
+      // Reset states for a fresh fetch
+      setRawCategoryFilteredEvents([]); 
+      setDisplayedEvents([]);
       setLoadingEvents(true);
       setError(null);
       let fetchedCount = 0;
       let hasErrorInFetch = false;
+      const currentCombinedEvents: EventData[] = []; // Temporary array to build the combined list before setting state
 
       console.log(`[DEBUG] Fetching events for selected category: ${selectedCategory}`);
 
@@ -58,12 +62,12 @@ export default function HomePage() {
           qCol = query(
             collection(db, colName),
             where("isPublic", "==", true),
-            where("eventCategory", "==", selectedCategory), // Filter by selected category
+            where("eventCategory", "==", selectedCategory),
             orderBy("createdAt", "desc")
           );
         }
         
-        console.log(`[DEBUG] Setting up listener for collection: ${colName}, with query:`, qCol.toString());
+        console.log(`[DEBUG] Setting up listener for collection: ${colName}, with query:`, JSON.stringify(qCol.withConverter(null)._query)); // More readable query log
 
 
         const unsubscribe = onSnapshot(qCol, (snapshot) => {
@@ -79,51 +83,46 @@ export default function HomePage() {
               images: data.images || [],
               date: data.date,
               isPublic: data.isPublic || false,
-              // Ensure eventCategory is a string, default to 'other' if missing
               eventCategory: data.eventCategory || 'other', 
               ownerId: data.ownerId,
               createdAt: data.createdAt instanceof Timestamp ? data.createdAt : Timestamp.fromDate(new Date(data.createdAt as any || Date.now())),
+              story: data.story || '', // Ensure story is always a string for search
             };
             
             console.log(`[DEBUG] Processing event change: Type=${change.type}, ID=${eventData.id}, Title=${eventData.title}, isPublic=${eventData.isPublic}, eventCategory=${eventData.eventCategory}`);
 
-
             const eventKey = `${eventData.collectionName}-${eventData.id}`;
-            const existingIndexInCombinedList = allPublicEvents.findIndex(e => `${e.collectionName}-${e.id}` === eventKey);
+            const existingIndexInCombinedList = currentCombinedEvents.findIndex(e => `${e.collectionName}-${e.id}` === eventKey);
 
             if (change.type === "added") {
                 if (existingIndexInCombinedList === -1) {
-                    allPublicEvents.push(eventData);
+                    currentCombinedEvents.push(eventData);
                 }
             } else if (change.type === "modified") {
                 if (existingIndexInCombinedList > -1) {
-                    allPublicEvents[existingIndexInCombinedList] = eventData;
+                    currentCombinedEvents[existingIndexInCombinedList] = eventData;
                 }
             } else if (change.type === "removed") {
                 if (existingIndexInCombinedList > -1) {
-                    allPublicEvents.splice(existingIndexInCombinedList, 1);
+                    currentCombinedEvents.splice(existingIndexInCombinedList, 1);
                 }
             }
           });
 
-          const finalSortedEvents = [...allPublicEvents].sort((a, b) => {
+          // After processing changes for this collection, update the raw list
+          const uniqueEvents = Array.from(new Map(currentCombinedEvents.map(event => [`${event.collectionName}-${event.id}`, event])).values());
+          uniqueEvents.sort((a, b) => {
             const aTime = (a.createdAt as Timestamp)?.toMillis() || 0;
             const bTime = (b.createdAt as Timestamp)?.toMillis() || 0;
             return bTime - aTime;
           });
           
-          // Apply the current filter to the *combined* list before setting state
-          const filteredDisplayEvents = selectedCategory === "all"
-            ? finalSortedEvents
-            : finalSortedEvents.filter(event => event.eventCategory === selectedCategory);
-
-          console.log(`[DEBUG] Final events after filter (${selectedCategory}):`, filteredDisplayEvents.map(e => ({id: e.id, title: e.title, category: e.eventCategory})));
-          setEvents(filteredDisplayEvents);
+          setRawCategoryFilteredEvents([...uniqueEvents]); // Set the raw (category-filtered) events here
 
           fetchedCount++;
           if (fetchedCount === eventCollections.length && !hasErrorInFetch) {
             setLoadingEvents(false);
-            console.log("[DEBUG] All initial fetches completed.");
+            console.log("[DEBUG] All initial fetches completed for categories.");
           }
         }, (err) => {
           console.error(`Error fetching public events from ${colName} with category ${selectedCategory}:`, err);
@@ -139,9 +138,35 @@ export default function HomePage() {
 
     return () => {
       unsubscribes.forEach(unsub => unsub());
-      console.log("[DEBUG] All listeners unsubscribed.");
+      console.log("[DEBUG] All listeners unsubscribed on category/component change.");
     };
-  }, [selectedCategory]);
+  }, [selectedCategory]); // Re-run effect when selectedCategory changes
+
+  // Use useMemo to filter events based on search term.
+  // This will only re-run when rawCategoryFilteredEvents or searchTerm changes.
+  useEffect(() => {
+    if (loadingEvents && rawCategoryFilteredEvents.length === 0) {
+      // Still loading or no events after category filter, so no displayable events yet
+      setDisplayedEvents([]);
+      return;
+    }
+
+    const lowercasedSearchTerm = searchTerm.toLowerCase().trim();
+
+    if (!lowercasedSearchTerm) {
+      // If no search term, display all category-filtered events
+      setDisplayedEvents(rawCategoryFilteredEvents);
+    } else {
+      // Filter by search term across title, location, story
+      const filtered = rawCategoryFilteredEvents.filter(event => 
+        event.title.toLowerCase().includes(lowercasedSearchTerm) ||
+        event.location.toLowerCase().includes(lowercasedSearchTerm) ||
+        (event.story && event.story.toLowerCase().includes(lowercasedSearchTerm)) // Check story only if it exists
+      );
+      setDisplayedEvents(filtered);
+    }
+    console.log(`[DEBUG] Events after search filter '${searchTerm}':`, displayedEvents.map(e => e.title));
+  }, [rawCategoryFilteredEvents, searchTerm, loadingEvents]); // Depend on raw events and search term
 
 
   return (
@@ -167,8 +192,21 @@ export default function HomePage() {
             <SparklesIcon className="w-8 h-8 text-blue-600" /> Discover Public Events
           </h2>
 
-          {/* Category Filter Dropdown */}
-          <div className="mb-6 flex justify-end">
+          {/* Search Bar and Category Filter */}
+          <div className="mb-6 flex flex-col sm:flex-row justify-between gap-4">
+            {/* Search Input */}
+            <div className="relative flex-grow">
+              <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <Input
+                type="text"
+                placeholder="Search by title, location, or story..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 rounded-lg border-gray-300 focus:border-blue-500 focus:ring-blue-500 transition-all shadow-sm"
+              />
+            </div>
+            
+            {/* Category Filter Dropdown */}
             <Select
               value={selectedCategory}
               onValueChange={(value) => setSelectedCategory(value as EventData['eventCategory'] | "all")}
@@ -178,7 +216,6 @@ export default function HomePage() {
               </SelectTrigger>
               <SelectContent className="bg-white rounded-lg shadow-lg border border-gray-200">
                 <SelectItem value="all">All Categories</SelectItem>
-                {/* Changed values to be PLURAL, matching Firestore data */}
                 <SelectItem value="weddings">Wedding</SelectItem>
                 <SelectItem value="birthdays">Birthday</SelectItem>
                 <SelectItem value="babyshowers">Baby Shower</SelectItem>
@@ -200,13 +237,13 @@ export default function HomePage() {
             </div>
           ) : error ? (
             <p className="text-center text-red-500 text-lg">{error}</p>
-          ) : events.length === 0 ? (
+          ) : displayedEvents.length === 0 ? ( // Changed from events.length to displayedEvents.length
             <p className="text-center text-gray-500 text-lg py-8">
-                No public events found for the selected category. Be the first to create one!
+                No public events found matching your criteria. Be the first to create one!
             </p>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-              {events.map((event) => (
+              {displayedEvents.map((event) => ( // Changed from events.map to displayedEvents.map
                 <Link key={`${event.collectionName}-${event.id}`} href={`/events/${event.collectionName}/${event.id}`} passHref>
                   <div className="block bg-gray-50 border border-gray-200 rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-shadow duration-200 transform hover:-translate-y-1">
                     <div className="relative w-full h-48 bg-gray-200">
