@@ -185,14 +185,14 @@ export default function HomePage() {
               qCol = query(
                 collection(db, colName),
                 where("isPublic", "==", true),
-                orderBy("createdAt", "asc")
+                orderBy("createdAt", "desc")
               );
             } else {
               qCol = query(
                 collection(db, colName),
                 where("isPublic", "==", true),
                 where("eventCategory", "==", selectedCategory),
-                orderBy("createdAt", "asc")
+                orderBy("createdAt", "desc")
               );
             }
             fetchPromises.push(getDocs(qCol));
